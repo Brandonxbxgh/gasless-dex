@@ -14,7 +14,7 @@ import { splitSignature, SignatureType } from "@/lib/signature";
 import {
   supportedChains,
   WRAPPED_NATIVE,
-  USDC_ADDRESS,
+  getDefaultSellToken,
   type SupportedChainId,
 } from "@/lib/chains";
 
@@ -43,7 +43,7 @@ const TOKEN_DECIMALS: Record<string, number> = {
   BNB: 18,
 };
 
-// Stables (USDC, USDT) + native per chain so you can swap e.g. BNB ↔ USDT
+// Only native/supported tokens per chain (no bridged tokens; BNB has no native USDC)
 const TOKEN_OPTIONS: Record<SupportedChainId, { address: `0x${string}`; symbol: string }[]> = {
   8453: [
     { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as `0x${string}`, symbol: "USDC" },
@@ -61,7 +61,6 @@ const TOKEN_OPTIONS: Record<SupportedChainId, { address: `0x${string}`; symbol: 
     { address: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270" as `0x${string}`, symbol: "MATIC" },
   ],
   56: [
-    { address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d" as `0x${string}`, symbol: "USDC" },
     { address: "0x55d398326f99059fF775485246999027B3197955" as `0x${string}`, symbol: "USDT" },
     { address: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c" as `0x${string}`, symbol: "BNB" },
   ],
@@ -70,6 +69,15 @@ const TOKEN_OPTIONS: Record<SupportedChainId, { address: `0x${string}`; symbol: 
     { address: "0xdAC17F958D2ee523a2206206994597C13D831ec7" as `0x${string}`, symbol: "USDT" },
     { address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as `0x${string}`, symbol: "ETH" },
   ],
+};
+
+// Minimum sell amount (0x rejects tiny amounts): 1 for 6-decimals, 0.001 for 18
+const MIN_SELL_AMOUNT: Record<string, number> = {
+  USDC: 1,
+  USDT: 1,
+  ETH: 0.001,
+  MATIC: 0.001,
+  BNB: 0.001,
 };
 
 export function Swap() {
@@ -82,13 +90,13 @@ export function Swap() {
   const { data: walletClient } = useWalletClient();
 
   const [sellToken, setSellToken] = useState<`0x${string}`>(
-    () => USDC_ADDRESS[supportedChainId] || TOKEN_OPTIONS[8453][0].address
+    () => getDefaultSellToken(supportedChainId)
   );
   const [buyToken, setBuyToken] = useState<`0x${string}`>(
     () => WRAPPED_NATIVE[supportedChainId] || TOKEN_OPTIONS[8453][1].address
   );
   useEffect(() => {
-    setSellToken(USDC_ADDRESS[supportedChainId] || TOKEN_OPTIONS[8453][0].address);
+    setSellToken(getDefaultSellToken(supportedChainId));
     setBuyToken(WRAPPED_NATIVE[supportedChainId] || TOKEN_OPTIONS[8453][1].address);
     setQuote(null);
   }, [supportedChainId]);
@@ -136,14 +144,26 @@ export function Swap() {
     ? customRecipient.trim()
     : address ?? "";
 
+  const sellSymbol = tokens.find((t) => t.address === sellToken)?.symbol ?? "USDC";
+  const minSellAmount = MIN_SELL_AMOUNT[sellSymbol] ?? 1;
+  const amountNum = sellAmount ? parseFloat(sellAmount) : 0;
+  const isBelowMin = amountNum > 0 && amountNum < minSellAmount;
+
   const fetchQuote = useCallback(async () => {
     if (!address || !sellAmount || parseFloat(sellAmount) <= 0) return;
+    const sellSymbol = tokens.find((t) => t.address === sellToken)?.symbol ?? "USDC";
+    const minAmount = MIN_SELL_AMOUNT[sellSymbol] ?? 1;
+    const amountNum = parseFloat(sellAmount);
+    if (amountNum < minAmount) {
+      setQuoteError(`Minimum sell amount is ${minAmount} ${sellSymbol}. Try at least ${minAmount} ${sellSymbol} or check your wallet balance.`);
+      setQuote(null);
+      return;
+    }
     setQuoteError(null);
     setQuote(null);
     setReceiveUsd(null);
     setQuoteLoading(true);
     try {
-      const sellSymbol = tokens.find((t) => t.address === sellToken)?.symbol ?? "USDC";
       const decimals = TOKEN_DECIMALS[sellSymbol] ?? 6;
       const amountWei = parseUnits(sellAmount, decimals).toString();
       const res = await getGaslessQuote({
@@ -174,7 +194,13 @@ export function Swap() {
         setQuoteError("No liquidity available for this trade");
       }
     } catch (e) {
-      setQuoteError(e instanceof Error ? e.message : "Failed to fetch quote");
+      const msg = e instanceof Error ? e.message : "Failed to fetch quote";
+      const lower = msg.toLowerCase();
+      if (lower.includes("insufficient balance") || lower.includes("sell amount too small") || lower.includes("provided sell amount too small")) {
+        setQuoteError(`Amount too small or insufficient balance. Try at least ${MIN_SELL_AMOUNT[sellSymbol] ?? 1} ${sellSymbol} and check your wallet balance.`);
+      } else {
+        setQuoteError(msg);
+      }
     } finally {
       setQuoteLoading(false);
     }
@@ -422,9 +448,12 @@ export function Swap() {
           <div className="mt-5 flex flex-col gap-3">
             {swapStatus === "idle" && (
               <>
+                {isBelowMin && (
+                  <p className="text-amber-400 text-sm">Minimum sell amount: {minSellAmount} {sellSymbol}</p>
+                )}
                 <button
                   onClick={fetchQuote}
-                  disabled={!sellAmount || parseFloat(sellAmount) <= 0 || quoteLoading}
+                  disabled={!sellAmount || amountNum <= 0 || quoteLoading || isBelowMin}
                   className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium transition"
                 >
                   {quoteLoading ? "Getting quote..." : "Get Quote"}
