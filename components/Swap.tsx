@@ -22,6 +22,8 @@ const EXPLORER_URL: Record<SupportedChainId, string> = {
   8453: "https://basescan.org",
   42161: "https://arbiscan.io",
   137: "https://polygonscan.com",
+  56: "https://bscscan.com",
+  1: "https://etherscan.io",
 };
 
 const SWAP_FEE_BPS = "10"; // 0.1%
@@ -31,6 +33,7 @@ const TOKEN_DECIMALS: Record<string, number> = {
   USDC: 6,
   WETH: 18,
   WMATIC: 18,
+  WBNB: 18,
 };
 
 const TOKEN_OPTIONS: Record<SupportedChainId, { address: `0x${string}`; symbol: string }[]> = {
@@ -45,6 +48,14 @@ const TOKEN_OPTIONS: Record<SupportedChainId, { address: `0x${string}`; symbol: 
   137: [
     { address: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174" as `0x${string}`, symbol: "USDC" },
     { address: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270" as `0x${string}`, symbol: "WMATIC" },
+  ],
+  56: [
+    { address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d" as `0x${string}`, symbol: "USDC" },
+    { address: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c" as `0x${string}`, symbol: "WBNB" },
+  ],
+  1: [
+    { address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as `0x${string}`, symbol: "USDC" },
+    { address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as `0x${string}`, symbol: "WETH" },
   ],
 };
 

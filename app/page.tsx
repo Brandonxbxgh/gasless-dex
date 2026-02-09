@@ -8,7 +8,7 @@ export default function Home() {
           Gasless DEX Aggregator
         </h1>
         <p className="text-zinc-400">
-          Swap on Base, Arbitrum & Polygon — zero gas, just sign
+          Swap on Base, Arbitrum, Polygon, BNB & Ethereum — zero gas, just sign
         </p>
       </div>
       <Swap />
