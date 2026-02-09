@@ -132,12 +132,13 @@ chainId: supportedChainId,
       let approvalDataToSubmit = null;
 
       if (tokenApprovalRequired && gaslessApprovalAvailable && quote.approval) {
+        const a = quote.approval.eip712;
         const approvalSig = await walletClient.signTypedData({
           account: address,
-          domain: quote.approval.eip712.domain as object,
-          types: quote.approval.eip712.types as object,
-          primaryType: quote.approval.eip712.primaryType,
-          message: quote.approval.eip712.message as object,
+          domain: a.domain,
+          types: a.types as Record<string, { name: string; type: string }[]>,
+          primaryType: a.primaryType,
+          message: a.message,
         });
         const split = splitSignature(approvalSig as `0x${string}`);
         approvalDataToSubmit = {
@@ -154,12 +155,13 @@ chainId: supportedChainId,
         return;
       }
 
+      const t = quote.trade.eip712;
       const tradeSig = await walletClient.signTypedData({
         account: address,
-        domain: quote.trade.eip712.domain as object,
-        types: quote.trade.eip712.types as object,
-        primaryType: quote.trade.eip712.primaryType,
-        message: quote.trade.eip712.message as object,
+        domain: t.domain,
+        types: t.types as Record<string, { name: string; type: string }[]>,
+        primaryType: t.primaryType,
+        message: t.message,
       });
       const tradeSplit = splitSignature(tradeSig as `0x${string}`);
       const tradeDataToSubmit = {
