@@ -102,10 +102,6 @@ export function Swap() {
     }
   }, [isConnected, address]);
 
-  useEffect(() => {
-    if (!quote) setReceiveUsd(null);
-  }, [quote]);
-
   const [sellAmount, setSellAmount] = useState("");
   const [quote, setQuote] = useState<GaslessQuoteResponse | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
@@ -116,6 +112,10 @@ export function Swap() {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [customRecipient, setCustomRecipient] = useState("");
   const [receiveUsd, setReceiveUsd] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!quote) setReceiveUsd(null);
+  }, [quote]);
 
   const tokens = useMemo(
     () => TOKEN_OPTIONS[supportedChainId] ?? TOKEN_OPTIONS[8453],
