@@ -26,7 +26,7 @@ const EXPLORER_URL: Record<SupportedChainId, string> = {
   1: "https://etherscan.io",
 };
 
-const SWAP_FEE_BPS = "10"; // 0.1%
+const SWAP_FEE_BPS = "10";
 const SWAP_FEE_RECIPIENT = process.env.NEXT_PUBLIC_SWAP_FEE_RECIPIENT || "";
 
 const TOKEN_DECIMALS: Record<string, number> = {
@@ -79,6 +79,15 @@ export function Swap() {
     setBuyToken(WRAPPED_NATIVE[supportedChainId] || TOKEN_OPTIONS[8453][1].address);
     setQuote(null);
   }, [supportedChainId]);
+
+  // Refresh state when wallet connects or chain changes (fixes WalletConnect not updating)
+  useEffect(() => {
+    if (isConnected && address) {
+      setQuote(null);
+      setQuoteError(null);
+    }
+  }, [isConnected, address]);
+
   const [sellAmount, setSellAmount] = useState("");
   const [quote, setQuote] = useState<GaslessQuoteResponse | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
@@ -113,8 +122,8 @@ export function Swap() {
       const decimals = TOKEN_DECIMALS[sellSymbol] ?? 6;
       const amountWei = parseUnits(sellAmount, decimals).toString();
       const res = await getGaslessQuote({
-chainId: supportedChainId,
-    sellToken,
+        chainId: supportedChainId,
+        sellToken,
         buyToken,
         sellAmount: amountWei,
         taker: address,
@@ -196,7 +205,7 @@ chainId: supportedChainId,
       let attempts = 0;
       while (statusRes.status !== "confirmed" && attempts < 20) {
         await new Promise((r) => setTimeout(r, 2000));
-        statusRes = await getGaslessStatus(hash, chainId);
+        statusRes = await getGaslessStatus(hash, supportedChainId);
         attempts++;
       }
       if (statusRes.status === "confirmed" && statusRes.transactionHash) {
@@ -209,7 +218,7 @@ chainId: supportedChainId,
       setSwapError(e instanceof Error ? e.message : "Swap failed");
       setSwapStatus("error");
     }
-  }, [quote, address, walletClient, chainId, supportedChainId]);
+  }, [quote, address, walletClient, supportedChainId]);
 
   const resetSwap = useCallback(() => {
     setSwapStatus("idle");
@@ -218,19 +227,25 @@ chainId: supportedChainId,
     setTxHash(null);
   }, []);
 
+  const flipTokens = useCallback(() => {
+    setSellToken(buyToken);
+    setBuyToken(sellToken);
+    setQuote(null);
+  }, [sellToken, buyToken]);
+
   return (
-    <div className="w-full max-w-md mx-auto rounded-2xl bg-zinc-900/80 border border-zinc-700/50 p-6 shadow-xl">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-semibold text-white">Gasless Swap</h2>
-        <div className="flex gap-2">
+    <div className="w-full max-w-md mx-auto rounded-2xl border border-[var(--delta-border)] p-4 sm:p-6 shadow-xl bg-[var(--delta-card)] backdrop-blur">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+        <h2 className="text-lg sm:text-xl font-semibold text-white">Swap</h2>
+        <div className="flex flex-wrap gap-1.5">
           {supportedChains.map((ch) => (
             <button
               key={ch.id}
               onClick={() => switchChain?.({ chainId: ch.id })}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition ${
                 supportedChainId === ch.id
-                  ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/50"
-                  : "bg-zinc-800 text-zinc-400 hover:text-white border border-transparent"
+                  ? "bg-indigo-500/30 text-indigo-300 border border-indigo-400/50"
+                  : "bg-slate-700/50 text-slate-400 hover:text-white border border-transparent"
               }`}
             >
               {ch.name}
@@ -241,15 +256,17 @@ chainId: supportedChainId,
 
       {!isConnected ? (
         <div className="py-8 flex flex-col items-center gap-4">
-          <p className="text-zinc-400 text-sm">Connect your wallet to swap</p>
+          <p className="text-slate-400 text-sm">Connect your wallet to swap</p>
           <ConnectButton />
         </div>
       ) : (
+        <div key={address ?? "connected"}>
         <>
-          <div className="space-y-4">
-            <div className="rounded-xl bg-zinc-800/50 p-4 border border-zinc-700/30">
-              <label className="text-xs text-zinc-500 block mb-2">You pay</label>
-              <div className="flex justify-between items-center gap-2">
+          <div className="space-y-3">
+            {/* From row: amount + token dropdown */}
+            <div className="rounded-xl bg-slate-800/60 p-3 sm:p-4 border border-slate-600/40">
+              <label className="text-xs text-slate-500 block mb-2">From</label>
+              <div className="flex gap-2 items-center">
                 <input
                   type="text"
                   inputMode="decimal"
@@ -259,12 +276,16 @@ chainId: supportedChainId,
                     const v = e.target.value.replace(/[^0-9.]/g, "");
                     setSellAmount(v);
                   }}
-                  className="bg-transparent text-white text-xl font-medium w-full outline-none placeholder:text-zinc-600"
+                  className="flex-1 min-w-0 bg-transparent text-white text-lg font-medium outline-none placeholder:text-slate-500"
                 />
                 <select
                   value={sellToken}
-                  onChange={(e) => setSellToken(e.target.value as `0x${string}`)}
-                  className="bg-zinc-700/50 text-white rounded-lg px-3 py-2 text-sm border border-zinc-600"
+                  onChange={(e) => {
+                    setSellToken(e.target.value as `0x${string}`);
+                    setQuote(null);
+                  }}
+                  className="bg-slate-700/80 text-white rounded-lg px-3 py-2 text-sm font-medium border border-slate-600 min-w-[5rem] sm:min-w-[6rem] cursor-pointer focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+                  aria-label="Select token to sell"
                 >
                   {tokens.map((t) => (
                     <option key={t.address} value={t.address}>
@@ -275,10 +296,25 @@ chainId: supportedChainId,
               </div>
             </div>
 
-            <div className="rounded-xl bg-zinc-800/50 p-4 border border-zinc-700/30">
-              <label className="text-xs text-zinc-500 block mb-2">You receive</label>
-              <div className="flex justify-between items-center gap-2">
-                <span className="text-white text-xl font-medium">
+            {/* Flip button */}
+            <div className="flex justify-center -my-1">
+              <button
+                type="button"
+                onClick={flipTokens}
+                className="p-1.5 rounded-full bg-slate-700 hover:bg-indigo-500/30 border border-slate-600 hover:border-indigo-400/50 text-slate-400 hover:text-indigo-300 transition"
+                aria-label="Swap from and to"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                </svg>
+              </button>
+            </div>
+
+            {/* To row: amount + token dropdown */}
+            <div className="rounded-xl bg-slate-800/60 p-3 sm:p-4 border border-slate-600/40">
+              <label className="text-xs text-slate-500 block mb-2">To</label>
+              <div className="flex gap-2 items-center">
+                <span className="flex-1 min-w-0 text-white text-lg font-medium truncate">
                   {quote
                     ? formatUnits(
                         BigInt(quote.buyAmount),
@@ -288,8 +324,12 @@ chainId: supportedChainId,
                 </span>
                 <select
                   value={buyToken}
-                  onChange={(e) => setBuyToken(e.target.value as `0x${string}`)}
-                  className="bg-zinc-700/50 text-white rounded-lg px-3 py-2 text-sm border border-zinc-600"
+                  onChange={(e) => {
+                    setBuyToken(e.target.value as `0x${string}`);
+                    setQuote(null);
+                  }}
+                  className="bg-slate-700/80 text-white rounded-lg px-3 py-2 text-sm font-medium border border-slate-600 min-w-[5rem] sm:min-w-[6rem] cursor-pointer focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+                  aria-label="Select token to receive"
                 >
                   {tokens.map((t) => (
                     <option key={t.address} value={t.address}>
@@ -299,8 +339,8 @@ chainId: supportedChainId,
                 </select>
               </div>
               {quote?.fees?.integratorFee && (
-                <p className="text-xs text-zinc-500 mt-2">
-                  Fee (0.1%): {formatUnits(BigInt(quote.fees.integratorFee.amount), 6)} {quote.route?.tokens?.[0]?.symbol}
+                <p className="text-xs text-slate-500 mt-2">
+                  Fee (0.1%): {formatUnits(BigInt(quote.fees.integratorFee.amount), 6)} {tokens.find((t) => t.address === sellToken)?.symbol}
                 </p>
               )}
             </div>
@@ -310,20 +350,20 @@ chainId: supportedChainId,
             <p className="text-red-400 text-sm mt-2">{quoteError}</p>
           )}
 
-          <div className="mt-6 flex flex-col gap-3">
+          <div className="mt-5 flex flex-col gap-3">
             {swapStatus === "idle" && (
               <>
                 <button
                   onClick={fetchQuote}
                   disabled={!sellAmount || parseFloat(sellAmount) <= 0 || quoteLoading}
-                  className="w-full py-3 rounded-xl bg-zinc-700 hover:bg-zinc-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium transition"
+                  className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium transition"
                 >
                   {quoteLoading ? "Getting quote..." : "Get Quote"}
                 </button>
                 {quote && (
                   <button
                     onClick={executeSwap}
-                    className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium transition"
+                    className="w-full py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-semibold transition"
                   >
                     Sign & Swap (No Gas!)
                   </button>
@@ -331,7 +371,7 @@ chainId: supportedChainId,
               </>
             )}
             {(swapStatus === "signing" || swapStatus === "submitting") && (
-              <p className="text-center text-amber-400 py-2">
+              <p className="text-center text-amber-400 py-2 text-sm">
                 {swapStatus === "signing" ? "Check your wallet to sign..." : "Submitting..."}
               </p>
             )}
@@ -343,14 +383,14 @@ chainId: supportedChainId,
                     href={`${EXPLORER_URL[supportedChainId] || "https://basescan.org"}/tx/${txHash}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block text-center text-sm text-emerald-400/80 hover:underline"
+                    className="block text-center text-sm text-cyan-400 hover:underline"
                   >
                     View on explorer
                   </a>
                 )}
                 <button
                   onClick={resetSwap}
-                  className="w-full py-2 rounded-lg border border-zinc-600 text-zinc-400 hover:text-white text-sm"
+                  className="w-full py-2 rounded-lg border border-slate-600 text-slate-400 hover:text-white text-sm"
                 >
                   New Swap
                 </button>
@@ -361,7 +401,7 @@ chainId: supportedChainId,
                 <p className="text-red-400 text-sm">{swapError}</p>
                 <button
                   onClick={resetSwap}
-                  className="w-full py-2 rounded-lg border border-zinc-600 text-zinc-400 hover:text-white text-sm"
+                  className="w-full py-2 rounded-lg border border-slate-600 text-slate-400 hover:text-white text-sm"
                 >
                   Try Again
                 </button>
@@ -369,10 +409,11 @@ chainId: supportedChainId,
             )}
           </div>
 
-          <p className="text-xs text-zinc-500 mt-4 text-center">
-            Gasless swaps powered by 0x. Sign a message, no gas needed.
+          <p className="text-xs text-slate-500 mt-4 text-center">
+            Gasless by DeltaChainLabs · Powered by 0x
           </p>
         </>
+        </div>
       )}
     </div>
   );

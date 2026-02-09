@@ -1,3 +1,12 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --delta-primary: #6366f1;
+  --delta-primary-bright: #818cf8;
+  --delta-accent: #22d3ee;
+  --delta-success: #34d399;
+  --delta-card: rgba(30, 41, 59, 0.9);
+  --delta-border: rgba(99, 102, 241, 0.3);
+}
