@@ -1,19 +1,7 @@
 /**
- * 0x Gasless API v2 - Quote, Submit, and Status
+ * 0x Gasless API v2 - via Next.js API routes (avoids CORS, keeps key server-side)
  * Docs: https://0x.org/docs/upgrading/upgrading_to_gasless_v2
  */
-
-const BASE_URL = "https://api.0x.org";
-
-function getHeaders(): HeadersInit {
-  const apiKey = process.env.NEXT_PUBLIC_ZERO_EX_API_KEY;
-  if (!apiKey) throw new Error("NEXT_PUBLIC_ZERO_EX_API_KEY is not set");
-  return {
-    "Content-Type": "application/json",
-    "0x-api-key": apiKey,
-    "0x-version": "v2",
-  };
-}
 
 export interface GaslessPriceParams {
   chainId: number;
@@ -97,13 +85,16 @@ export interface SignedApprovalData {
   };
 }
 
-async function fetchJsonOrThrow(res: Response) {
+async function handleResponse(res: Response) {
   const ct = res.headers.get("content-type") || "";
-  if (!res.ok || !ct.includes("application/json")) {
-    const bodyText = await res.text().catch(() => "<unreadable body>");
-    throw new Error(`0x API Error ${res.status}: ${bodyText}`);
+  const data = ct.includes("application/json")
+    ? await res.json().catch(() => ({}))
+    : {};
+  if (!res.ok) {
+    const msg = data?.error || data?.reason || data?.message || `Request failed (${res.status})`;
+    throw new Error(msg);
   }
-  return res.json();
+  return data;
 }
 
 function buildQuery(params: Record<string, string | number | undefined>): string {
@@ -114,29 +105,7 @@ function buildQuery(params: Record<string, string | number | undefined>): string
   return search.toString();
 }
 
-/** Get indicative price (no taker required) */
-export async function getGaslessPrice(
-  params: GaslessPriceParams
-): Promise<GaslessQuoteResponse> {
-  const qs = buildQuery({
-    chainId: params.chainId,
-    sellToken: params.sellToken,
-    buyToken: params.buyToken,
-    sellAmount: params.sellAmount,
-    taker: params.taker,
-    swapFeeBps: params.swapFeeBps,
-    swapFeeRecipient: params.swapFeeRecipient,
-    swapFeeToken: params.swapFeeToken,
-    tradeSurplusRecipient: params.tradeSurplusRecipient,
-    slippageBps: params.slippageBps ?? 100,
-  });
-  const res = await fetch(`${BASE_URL}/gasless/price?${qs}`, {
-    headers: getHeaders(),
-  });
-  return fetchJsonOrThrow(res);
-}
-
-/** Get firm quote (taker required) - includes EIP-712 data for signing */
+/** Get firm quote (taker required) - via our API route to avoid CORS */
 export async function getGaslessQuote(
   params: GaslessQuoteParams
 ): Promise<GaslessQuoteResponse> {
@@ -152,22 +121,20 @@ export async function getGaslessQuote(
     tradeSurplusRecipient: params.tradeSurplusRecipient,
     slippageBps: params.slippageBps ?? 100,
   });
-  const res = await fetch(`${BASE_URL}/gasless/quote?${qs}`, {
-    headers: getHeaders(),
-  });
-  return fetchJsonOrThrow(res);
+  const res = await fetch(`/api/quote?${qs}`);
+  return handleResponse(res) as Promise<GaslessQuoteResponse>;
 }
 
 /** Submit signed gasless swap */
 export async function submitGaslessSwap(
   body: SubmitRequestBody
 ): Promise<{ tradeHash: string }> {
-  const res = await fetch(`${BASE_URL}/gasless/submit`, {
+  const res = await fetch("/api/submit", {
     method: "POST",
-    headers: getHeaders(),
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  return fetchJsonOrThrow(res);
+  return handleResponse(res) as Promise<{ tradeHash: string }>;
 }
 
 /** Check trade status */
@@ -175,9 +142,6 @@ export async function getGaslessStatus(
   tradeHash: string,
   chainId: number
 ): Promise<{ status: string; transactionHash?: string }> {
-  const qs = buildQuery({ chainId });
-  const res = await fetch(`${BASE_URL}/gasless/status/${tradeHash}?${qs}`, {
-    headers: getHeaders(),
-  });
-  return fetchJsonOrThrow(res);
+  const res = await fetch(`/api/status/${encodeURIComponent(tradeHash)}?chainId=${chainId}`);
+  return handleResponse(res) as Promise<{ status: string; transactionHash?: string }>;
 }

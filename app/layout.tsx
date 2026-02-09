@@ -14,7 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className="min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950/30 to-slate-950 text-slate-100 antialiased">
+      <body className="min-h-screen bg-[var(--delta-bg)] bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/40 text-[var(--delta-text)] antialiased">
         <Providers>{children}</Providers>
       </body>
     </html>

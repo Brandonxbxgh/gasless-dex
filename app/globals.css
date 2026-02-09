@@ -7,6 +7,9 @@
   --delta-primary-bright: #818cf8;
   --delta-accent: #22d3ee;
   --delta-success: #34d399;
-  --delta-card: rgba(30, 41, 59, 0.9);
-  --delta-border: rgba(99, 102, 241, 0.3);
+  --delta-card: rgba(30, 41, 59, 0.95);
+  --delta-card-border: rgba(148, 163, 184, 0.2);
+  --delta-text: #f1f5f9;
+  --delta-text-muted: #cbd5e1;
+  --delta-bg: #0f172a;
 }

@@ -4,15 +4,15 @@ export default function Home() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6">
       <div className="text-center mb-6 sm:mb-8">
-        <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-indigo-400 via-cyan-400 to-indigo-400 bg-clip-text text-transparent mb-2">
+        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight bg-gradient-to-r from-indigo-300 via-cyan-300 to-indigo-300 bg-clip-text text-transparent mb-3">
           DeltaChainLabs
         </h1>
-        <p className="text-slate-400 text-sm sm:text-base">
+        <p className="text-[var(--delta-text-muted)] text-base sm:text-lg font-medium max-w-md mx-auto leading-relaxed">
           Gasless swap — stable ↔ native on Base, Arbitrum, Polygon, BNB & Ethereum
         </p>
       </div>
       <Swap />
-      <p className="mt-6 text-xs text-slate-500 text-center max-w-sm">
+      <p className="mt-6 text-sm text-slate-400 text-center max-w-sm bg-slate-800/50 rounded-lg px-4 py-2 border border-slate-700/50">
         Powered by 0x. Your keys stay in your wallet.
       </p>
     </main>
