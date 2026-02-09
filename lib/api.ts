@@ -9,6 +9,7 @@ export interface GaslessPriceParams {
   buyToken: string;
   sellAmount: string;
   taker?: string;
+  recipient?: string; // optional; defaults to taker if not set
   swapFeeBps?: string;
   swapFeeRecipient?: string;
   swapFeeToken?: string;
@@ -115,6 +116,7 @@ export async function getGaslessQuote(
     buyToken: params.buyToken,
     sellAmount: params.sellAmount,
     taker: params.taker,
+    recipient: params.recipient,
     swapFeeBps: params.swapFeeBps,
     swapFeeRecipient: params.swapFeeRecipient,
     swapFeeToken: params.swapFeeToken,

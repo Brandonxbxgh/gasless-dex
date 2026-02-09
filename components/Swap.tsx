@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { useAccount, useChainId, useSwitchChain, useWalletClient } from "wagmi";
-import { parseUnits, formatUnits } from "viem";
+import { parseUnits, formatUnits, isAddress } from "viem";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import {
   getGaslessQuote,
@@ -29,33 +29,45 @@ const EXPLORER_URL: Record<SupportedChainId, string> = {
 const SWAP_FEE_BPS = "10";
 const SWAP_FEE_RECIPIENT = process.env.NEXT_PUBLIC_SWAP_FEE_RECIPIENT || "";
 
+function truncateAddress(addr: string) {
+  if (!addr || addr.length < 10) return addr;
+  return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+}
+
 // Display as native names (ETH, BNB, MATIC); we still use wrapped token addresses for the API
 const TOKEN_DECIMALS: Record<string, number> = {
   USDC: 6,
+  USDT: 6,
   ETH: 18,
   MATIC: 18,
   BNB: 18,
 };
 
+// Stables (USDC, USDT) + native per chain so you can swap e.g. BNB ↔ USDT
 const TOKEN_OPTIONS: Record<SupportedChainId, { address: `0x${string}`; symbol: string }[]> = {
   8453: [
     { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as `0x${string}`, symbol: "USDC" },
+    { address: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2" as `0x${string}`, symbol: "USDT" },
     { address: "0x4200000000000000000000000000000000000006" as `0x${string}`, symbol: "ETH" },
   ],
   42161: [
     { address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" as `0x${string}`, symbol: "USDC" },
+    { address: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9" as `0x${string}`, symbol: "USDT" },
     { address: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1" as `0x${string}`, symbol: "ETH" },
   ],
   137: [
     { address: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174" as `0x${string}`, symbol: "USDC" },
+    { address: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F" as `0x${string}`, symbol: "USDT" },
     { address: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270" as `0x${string}`, symbol: "MATIC" },
   ],
   56: [
     { address: "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d" as `0x${string}`, symbol: "USDC" },
+    { address: "0x55d398326f99059fF775485246999027B3197955" as `0x${string}`, symbol: "USDT" },
     { address: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c" as `0x${string}`, symbol: "BNB" },
   ],
   1: [
     { address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as `0x${string}`, symbol: "USDC" },
+    { address: "0xdAC17F958D2ee523a2206206994597C13D831ec7" as `0x${string}`, symbol: "USDT" },
     { address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as `0x${string}`, symbol: "ETH" },
   ],
 };
@@ -86,8 +98,13 @@ export function Swap() {
     if (isConnected && address) {
       setQuote(null);
       setQuoteError(null);
+      setReceiveUsd(null);
     }
   }, [isConnected, address]);
+
+  useEffect(() => {
+    if (!quote) setReceiveUsd(null);
+  }, [quote]);
 
   const [sellAmount, setSellAmount] = useState("");
   const [quote, setQuote] = useState<GaslessQuoteResponse | null>(null);
@@ -97,6 +114,8 @@ export function Swap() {
   const [swapError, setSwapError] = useState<string | null>(null);
   const [tradeHash, setTradeHash] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [customRecipient, setCustomRecipient] = useState("");
+  const [receiveUsd, setReceiveUsd] = useState<number | null>(null);
 
   const tokens = useMemo(
     () => TOKEN_OPTIONS[supportedChainId] ?? TOKEN_OPTIONS[8453],
@@ -113,10 +132,15 @@ export function Swap() {
     };
   }, [sellToken]);
 
+  const receiveAddress = customRecipient.trim() && isAddress(customRecipient.trim())
+    ? customRecipient.trim()
+    : address ?? "";
+
   const fetchQuote = useCallback(async () => {
     if (!address || !sellAmount || parseFloat(sellAmount) <= 0) return;
     setQuoteError(null);
     setQuote(null);
+    setReceiveUsd(null);
     setQuoteLoading(true);
     try {
       const sellSymbol = tokens.find((t) => t.address === sellToken)?.symbol ?? "USDC";
@@ -128,10 +152,24 @@ export function Swap() {
         buyToken,
         sellAmount: amountWei,
         taker: address,
+        recipient: receiveAddress && receiveAddress !== address ? receiveAddress : undefined,
         ...feeParams,
       });
       if (res.liquidityAvailable) {
         setQuote(res);
+        try {
+          const priceRes = await fetch(
+            `/api/token-price?chainId=${supportedChainId}&address=${encodeURIComponent(buyToken)}`
+          );
+          const { usd } = (await priceRes.json()) as { usd?: number | null };
+          if (typeof usd === "number" && usd > 0) {
+            const buyDecimals = TOKEN_DECIMALS[tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH"] ?? 18;
+            const buyAmountHuman = Number(formatUnits(BigInt(res.buyAmount), buyDecimals));
+            setReceiveUsd(buyAmountHuman * usd);
+          }
+        } catch {
+          setReceiveUsd(null);
+        }
       } else {
         setQuoteError("No liquidity available for this trade");
       }
@@ -140,7 +178,7 @@ export function Swap() {
     } finally {
       setQuoteLoading(false);
     }
-  }, [address, supportedChainId, sellToken, buyToken, sellAmount, feeParams, tokens]);
+  }, [address, supportedChainId, sellToken, buyToken, sellAmount, feeParams, tokens, receiveAddress]);
 
   const executeSwap = useCallback(async () => {
     if (!quote || !address || !walletClient) return;
@@ -263,6 +301,31 @@ export function Swap() {
       ) : (
         <div key={address ?? "connected"}>
         <>
+          <div className="rounded-lg bg-slate-800/60 border border-slate-600/40 px-3 py-2 mb-4 space-y-1">
+            <p className="text-xs text-slate-500">
+              Connected: <span className="text-slate-300 font-mono">{address ? truncateAddress(address) : ""}</span>
+            </p>
+            <p className="text-xs text-slate-500">
+              Receiving to: <span className="text-slate-300 font-mono">{receiveAddress ? truncateAddress(receiveAddress) : ""}</span>
+            </p>
+            <div>
+              <label className="text-xs text-slate-500 block mb-1">Send to different address (optional)</label>
+              <input
+                type="text"
+                placeholder="0x..."
+                value={customRecipient}
+                onChange={(e) => {
+                  setCustomRecipient(e.target.value);
+                  setQuote(null);
+                }}
+                className="w-full bg-slate-700/80 text-white text-sm rounded-lg px-3 py-2 border border-slate-600 placeholder:text-slate-500 focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+              />
+              {customRecipient.trim() && !isAddress(customRecipient.trim()) && (
+                <p className="text-xs text-amber-400 mt-1">Enter a valid EVM address</p>
+              )}
+            </div>
+          </div>
+
           <div className="space-y-3">
             {/* From row: amount + token dropdown */}
             <div className="rounded-xl bg-slate-800/80 p-3 sm:p-4 border border-slate-600/50">
@@ -344,6 +407,11 @@ export function Swap() {
                   Fee (0.1%): {formatUnits(BigInt(quote.fees.integratorFee.amount), 6)} {tokens.find((t) => t.address === sellToken)?.symbol}
                 </p>
               )}
+              {receiveUsd != null && receiveUsd > 0 && (
+                <p className="text-sm text-emerald-400/90 font-medium mt-2">
+                  ≈ ${receiveUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+                </p>
+              )}
             </div>
           </div>
 
@@ -410,7 +478,10 @@ export function Swap() {
             )}
           </div>
 
-          <p className="text-sm text-slate-400 mt-4 text-center">
+          <p className="text-xs text-slate-500 mt-3 text-center">
+            EVM wallets only. Tokens you sell leave your connected wallet; tokens you receive are sent to the address above (or your wallet if no custom address).
+          </p>
+          <p className="text-sm text-slate-400 mt-2 text-center">
             Gasless by DeltaChainLabs · Powered by 0x
           </p>
         </>
