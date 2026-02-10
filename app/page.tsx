@@ -2,7 +2,7 @@ import { Swap } from "@/components/Swap";
 
 export default function Home() {
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6">
+    <main className="min-h-screen flex flex-col items-center justify-center p-4 pt-8 sm:p-6 sm:pt-10">
       <div className="text-center mb-6 sm:mb-8">
         <h1 className="text-3xl sm:text-4xl font-bold tracking-tight bg-gradient-to-r from-indigo-300 via-cyan-300 to-indigo-300 bg-clip-text text-transparent mb-3">
           DeltaChainLabs
