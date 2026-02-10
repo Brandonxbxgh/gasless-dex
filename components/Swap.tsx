@@ -196,8 +196,13 @@ export function Swap() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to fetch quote";
       const lower = msg.toLowerCase();
-      if (lower.includes("insufficient balance") || lower.includes("sell amount too small") || lower.includes("provided sell amount too small")) {
-        setQuoteError(`Amount too small or insufficient balance. Try at least ${MIN_SELL_AMOUNT[sellSymbol] ?? 1} ${sellSymbol} and check your wallet balance.`);
+      const isAmountOrBalanceError =
+        lower.includes("insufficient balance") ||
+        lower.includes("sell amount too small") ||
+        lower.includes("provided sell amount too small");
+      // Only suggest our minimum when the user is actually below it; otherwise show the real API error
+      if (isAmountOrBalanceError && amountNum < minAmount) {
+        setQuoteError(`Sell at least ${minAmount} ${sellSymbol} (you entered ${sellAmount}). Check your wallet balance.`);
       } else {
         setQuoteError(msg);
       }
