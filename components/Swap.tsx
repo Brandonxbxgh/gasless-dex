@@ -2,14 +2,16 @@
 
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { useAccount, useChainId, useSwitchChain, useWalletClient } from "wagmi";
-import { parseUnits, formatUnits, isAddress } from "viem";
+import { parseUnits, formatUnits, isAddress, maxUint256 } from "viem";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import {
   getGaslessQuote,
+  getSwapQuote,
   submitGaslessSwap,
   getGaslessStatus,
-  ApiError,
+  NATIVE_TOKEN_ADDRESS,
   type GaslessQuoteResponse,
+  type SwapQuoteResponse,
 } from "@/lib/api";
 import { splitSignature, SignatureType } from "@/lib/signature";
 import {
@@ -18,6 +20,18 @@ import {
   getDefaultSellToken,
   type SupportedChainId,
 } from "@/lib/chains";
+
+const ERC20_APPROVE_ABI = [
+  { inputs: [{ name: "spender", type: "address" }, { name: "amount", type: "uint256" }], name: "approve", outputs: [{ type: "bool" }], stateMutability: "nonpayable", type: "function" },
+] as const;
+
+const NATIVE_SYMBOL_BY_CHAIN: Record<SupportedChainId, string> = {
+  8453: "ETH",
+  42161: "ETH",
+  137: "MATIC",
+  56: "BNB",
+  1: "ETH",
+};
 
 const EXPLORER_URL: Record<SupportedChainId, string> = {
   8453: "https://basescan.org",
@@ -106,6 +120,7 @@ export function Swap() {
     setSellToken(getDefaultSellToken(supportedChainId));
     setBuyToken(WRAPPED_NATIVE[supportedChainId] || TOKEN_OPTIONS[8453][1].address);
     setQuote(null);
+    setSwapQuote(null);
   }, [supportedChainId]);
 
   // Refresh state when wallet connects or chain changes (fixes WalletConnect not updating)
@@ -119,6 +134,7 @@ export function Swap() {
 
   const [sellAmount, setSellAmount] = useState("");
   const [quote, setQuote] = useState<GaslessQuoteResponse | null>(null);
+  const [swapQuote, setSwapQuote] = useState<SwapQuoteResponse | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
   const [swapStatus, setSwapStatus] = useState<"idle" | "signing" | "submitting" | "success" | "error">("idle");
@@ -127,10 +143,14 @@ export function Swap() {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [customRecipient, setCustomRecipient] = useState("");
   const [receiveUsd, setReceiveUsd] = useState<number | null>(null);
+  const [needsManualApproval, setNeedsManualApproval] = useState(false);
+  const [approvingInProgress, setApprovingInProgress] = useState(false);
 
   useEffect(() => {
-    if (!quote) setReceiveUsd(null);
-  }, [quote]);
+    if (!quote && !swapQuote) setReceiveUsd(null);
+  }, [quote, swapQuote]);
+
+  const isSellingNative = sellToken === WRAPPED_NATIVE[supportedChainId];
 
   const tokens = useMemo(
     () => TOKEN_OPTIONS[supportedChainId] ?? TOKEN_OPTIONS[8453],
@@ -164,42 +184,80 @@ export function Swap() {
     if (amountNum < minAmount) {
       setQuoteError(`Minimum sell amount is ${minAmount} ${sellSymbol}. Try at least ${minAmount} ${sellSymbol} or check your wallet balance.`);
       setQuote(null);
+      setSwapQuote(null);
       return;
     }
     setQuoteError(null);
     setQuote(null);
+    setSwapQuote(null);
     setReceiveUsd(null);
     setQuoteLoading(true);
     try {
       const decimals = getTokenDecimals(sellSymbol, supportedChainId);
       const amountWei = parseUnits(sellAmount, decimals).toString();
-      const res = await getGaslessQuote({
-        chainId: supportedChainId,
-        sellToken,
-        buyToken,
-        sellAmount: amountWei,
-        taker: address,
-        recipient: receiveAddress && receiveAddress !== address ? receiveAddress : undefined,
-        ...feeParams,
-      });
-      if (res.liquidityAvailable) {
-        setQuote(res);
-        try {
-          const priceRes = await fetch(
-            `/api/token-price?chainId=${supportedChainId}&address=${encodeURIComponent(buyToken)}`
-          );
-          const { usd } = (await priceRes.json()) as { usd?: number | null };
-          if (typeof usd === "number" && usd > 0) {
-            const buySymbolForDecimals = tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH";
-          const buyDecimals = getTokenDecimals(buySymbolForDecimals, supportedChainId);
-            const buyAmountHuman = Number(formatUnits(BigInt(res.buyAmount), buyDecimals));
-            setReceiveUsd(buyAmountHuman * usd);
+
+      if (isSellingNative) {
+        const res = await getSwapQuote({
+          chainId: supportedChainId,
+          sellToken: NATIVE_TOKEN_ADDRESS,
+          buyToken,
+          sellAmount: amountWei,
+          taker: address,
+          recipient: receiveAddress && receiveAddress !== address ? receiveAddress : undefined,
+          swapFeeBps: feeParams.swapFeeBps,
+          swapFeeRecipient: feeParams.swapFeeRecipient,
+          swapFeeToken: buyToken,
+          tradeSurplusRecipient: feeParams.tradeSurplusRecipient,
+          slippageBps: 100,
+        });
+        if (res.liquidityAvailable && res.transaction) {
+          setSwapQuote(res);
+          try {
+            const priceRes = await fetch(
+              `/api/token-price?chainId=${supportedChainId}&address=${encodeURIComponent(buyToken)}`
+            );
+            const { usd } = (await priceRes.json()) as { usd?: number | null };
+            if (typeof usd === "number" && usd > 0) {
+              const buySymbolForDecimals = tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH";
+              const buyDecimals = getTokenDecimals(buySymbolForDecimals, supportedChainId);
+              const buyAmountHuman = Number(formatUnits(BigInt(res.buyAmount), buyDecimals));
+              setReceiveUsd(buyAmountHuman * usd);
+            }
+          } catch {
+            setReceiveUsd(null);
           }
-        } catch {
-          setReceiveUsd(null);
+        } else {
+          setQuoteError("No liquidity available for this trade");
         }
       } else {
-        setQuoteError("No liquidity available for this trade");
+        const res = await getGaslessQuote({
+          chainId: supportedChainId,
+          sellToken,
+          buyToken,
+          sellAmount: amountWei,
+          taker: address,
+          recipient: receiveAddress && receiveAddress !== address ? receiveAddress : undefined,
+          ...feeParams,
+        });
+        if (res.liquidityAvailable) {
+          setQuote(res);
+          try {
+            const priceRes = await fetch(
+              `/api/token-price?chainId=${supportedChainId}&address=${encodeURIComponent(buyToken)}`
+            );
+            const { usd } = (await priceRes.json()) as { usd?: number | null };
+            if (typeof usd === "number" && usd > 0) {
+              const buySymbolForDecimals = tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH";
+              const buyDecimals = getTokenDecimals(buySymbolForDecimals, supportedChainId);
+              const buyAmountHuman = Number(formatUnits(BigInt(res.buyAmount), buyDecimals));
+              setReceiveUsd(buyAmountHuman * usd);
+            }
+          } catch {
+            setReceiveUsd(null);
+          }
+        } else {
+          setQuoteError("No liquidity available for this trade");
+        }
       }
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Failed to fetch quote";
@@ -220,23 +278,120 @@ export function Swap() {
             ? "On BNB Smart Chain the protocol requires a higher minimum for gasless swaps (try $50–100+ USDT), or use Ethereum/Base/Arbitrum for smaller amounts."
             : "The protocol requires a larger minimum for this pair on this network. Try a higher amount, or use Ethereum/Base/Arbitrum where smaller trades may be supported."
         );
+      } else if (lower.includes("insufficient balance") && isSellingNative) {
+        const nativeName = NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH";
+        setQuoteError(`You don't have enough ${nativeName} for this trade. Check your wallet balance.`);
       } else {
         setQuoteError(msg);
       }
     } finally {
       setQuoteLoading(false);
     }
-  }, [address, supportedChainId, sellToken, buyToken, sellAmount, feeParams, tokens, receiveAddress]);
+  }, [address, supportedChainId, sellToken, buyToken, sellAmount, feeParams, tokens, receiveAddress, isSellingNative]);
+
+  type ApprovalPayload = {
+    type: string;
+    eip712: { types: Record<string, { name: string; type: string }[]>; domain: Record<string, unknown>; message: Record<string, unknown>; primaryType: string };
+    signature: { r: string; s: string; v: number; signatureType: number };
+  };
+
+  const signAndSubmitTrade = useCallback(
+    async (approvalDataToSubmit: ApprovalPayload | null) => {
+      if (!quote || !address || !walletClient) return;
+      setSwapStatus("signing");
+      setSwapError(null);
+      try {
+        const t = quote.trade.eip712;
+        const tradeSig = await walletClient.signTypedData({
+          account: address,
+          domain: t.domain,
+          types: t.types as Record<string, { name: string; type: string }[]>,
+          primaryType: t.primaryType,
+          message: t.message,
+        });
+        const tradeSplit = splitSignature(tradeSig as `0x${string}`);
+        const tradeDataToSubmit = {
+          type: quote.trade.type,
+          eip712: quote.trade.eip712,
+          signature: {
+            ...tradeSplit,
+            signatureType: SignatureType.EIP712,
+          },
+        };
+        setSwapStatus("submitting");
+        const { tradeHash: hash } = await submitGaslessSwap({
+          trade: tradeDataToSubmit,
+          approval: approvalDataToSubmit ?? undefined,
+          chainId: supportedChainId,
+        });
+        setTradeHash(hash);
+        let statusRes = await getGaslessStatus(hash, supportedChainId);
+        let attempts = 0;
+        while (statusRes.status !== "confirmed" && attempts < 20) {
+          await new Promise((r) => setTimeout(r, 2000));
+          statusRes = await getGaslessStatus(hash, supportedChainId);
+          attempts++;
+        }
+        if (statusRes.status === "confirmed" && statusRes.transactionHash) {
+          setTxHash(statusRes.transactionHash);
+          setSwapStatus("success");
+        } else {
+          setSwapStatus("success");
+        }
+      } catch (e) {
+        setSwapError(e instanceof Error ? e.message : "Swap failed");
+        setSwapStatus("error");
+      }
+    },
+    [quote, address, walletClient, supportedChainId]
+  );
+
+  const doApprove = useCallback(async () => {
+    if (!quote?.issues?.allowance || !walletClient || !address) return;
+    const spender = quote.issues.allowance.spender as `0x${string}`;
+    setApprovingInProgress(true);
+    setSwapError(null);
+    setSwapStatus("signing");
+    try {
+      await walletClient.writeContract({
+        address: sellToken,
+        abi: ERC20_APPROVE_ABI,
+        functionName: "approve",
+        args: [spender, maxUint256],
+      });
+      setNeedsManualApproval(false);
+      await signAndSubmitTrade(null);
+    } catch (e) {
+      setSwapError(e instanceof Error ? e.message : "Approval failed");
+      setSwapStatus("error");
+    } finally {
+      setApprovingInProgress(false);
+    }
+  }, [quote, walletClient, address, sellToken, signAndSubmitTrade]);
 
   const executeSwap = useCallback(async () => {
-    if (!quote || !address || !walletClient) return;
+    if ((!quote && !swapQuote) || !address || !walletClient) return;
     setSwapStatus("signing");
     setSwapError(null);
+    setNeedsManualApproval(false);
     try {
-      const tokenApprovalRequired = quote.issues?.allowance != null;
+      if (swapQuote?.transaction) {
+        const tx = swapQuote.transaction;
+        const hash = await walletClient.sendTransaction({
+          to: tx.to as `0x${string}`,
+          data: tx.data as `0x${string}`,
+          value: BigInt(tx.value),
+          gas: tx.gas ? BigInt(tx.gas) : undefined,
+          gasPrice: tx.gasPrice ? BigInt(tx.gasPrice) : undefined,
+        });
+        setTxHash(hash);
+        setSwapStatus("success");
+        return;
+      }
+      const tokenApprovalRequired = quote!.issues?.allowance != null;
       const gaslessApprovalAvailable = quote.approval != null;
 
-      let approvalDataToSubmit = null;
+      let approvalDataToSubmit: ApprovalPayload | null = null;
 
       if (tokenApprovalRequired && gaslessApprovalAvailable && quote.approval) {
         const a = quote.approval.eip712;
@@ -257,67 +412,35 @@ export function Swap() {
           },
         };
       } else if (tokenApprovalRequired && !gaslessApprovalAvailable) {
-        setSwapError("This token requires a one-time approval. Please approve in your wallet first.");
+        setNeedsManualApproval(true);
+        setSwapError(
+          "This token needs a one-time approval (you’ll pay gas once). Click “Approve” below, then sign in your wallet."
+        );
         setSwapStatus("error");
         return;
       }
 
-      const t = quote.trade.eip712;
-      const tradeSig = await walletClient.signTypedData({
-        account: address,
-        domain: t.domain,
-        types: t.types as Record<string, { name: string; type: string }[]>,
-        primaryType: t.primaryType,
-        message: t.message,
-      });
-      const tradeSplit = splitSignature(tradeSig as `0x${string}`);
-      const tradeDataToSubmit = {
-        type: quote.trade.type,
-        eip712: quote.trade.eip712,
-        signature: {
-          ...tradeSplit,
-          signatureType: SignatureType.EIP712,
-        },
-      };
-
-      setSwapStatus("submitting");
-      const { tradeHash: hash } = await submitGaslessSwap({
-        trade: tradeDataToSubmit,
-        approval: approvalDataToSubmit ?? undefined,
-        chainId: supportedChainId,
-      });
-      setTradeHash(hash);
-
-      let statusRes = await getGaslessStatus(hash, supportedChainId);
-      let attempts = 0;
-      while (statusRes.status !== "confirmed" && attempts < 20) {
-        await new Promise((r) => setTimeout(r, 2000));
-        statusRes = await getGaslessStatus(hash, supportedChainId);
-        attempts++;
-      }
-      if (statusRes.status === "confirmed" && statusRes.transactionHash) {
-        setTxHash(statusRes.transactionHash);
-        setSwapStatus("success");
-      } else {
-        setSwapStatus("success");
-      }
+      await signAndSubmitTrade(approvalDataToSubmit);
     } catch (e) {
       setSwapError(e instanceof Error ? e.message : "Swap failed");
       setSwapStatus("error");
     }
-  }, [quote, address, walletClient, supportedChainId]);
+  }, [quote, swapQuote, address, walletClient, signAndSubmitTrade]);
 
   const resetSwap = useCallback(() => {
     setSwapStatus("idle");
     setSwapError(null);
     setTradeHash(null);
     setTxHash(null);
+    setNeedsManualApproval(false);
+    setSwapQuote(null);
   }, []);
 
   const flipTokens = useCallback(() => {
     setSellToken(buyToken);
     setBuyToken(sellToken);
     setQuote(null);
+    setSwapQuote(null);
   }, [sellToken, buyToken]);
 
   return (
@@ -427,9 +550,9 @@ export function Swap() {
               <label className="text-xs font-medium text-slate-400 block mb-2">To</label>
               <div className="flex gap-2 items-center">
                 <span className="flex-1 min-w-0 text-white text-lg font-medium truncate">
-                  {quote
+                  {(quote || swapQuote)
                     ? formatUnits(
-                        BigInt(quote.buyAmount),
+                        BigInt((quote ?? swapQuote)!.buyAmount),
                         getTokenDecimals(tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH", supportedChainId)
                       )
                     : "0.0"}
@@ -439,6 +562,7 @@ export function Swap() {
                   onChange={(e) => {
                     setBuyToken(e.target.value as `0x${string}`);
                     setQuote(null);
+                    setSwapQuote(null);
                   }}
                   className="bg-slate-700 text-white rounded-lg px-3 py-2 text-sm font-medium border border-slate-600 min-w-[5rem] sm:min-w-[6rem] cursor-pointer focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
                   aria-label="Select token to receive"
@@ -450,9 +574,13 @@ export function Swap() {
                   ))}
                 </select>
               </div>
-              {quote?.fees?.integratorFee && (
+              {(quote?.fees?.integratorFee || swapQuote?.fees?.integratorFee) && (
                 <p className="text-xs text-slate-400 mt-2">
-                  Fee (0.1%): {formatUnits(BigInt(quote.fees.integratorFee.amount), getTokenDecimals(sellSymbol, supportedChainId))} {sellSymbol}
+                  Fee (0.1%): {quote?.fees?.integratorFee
+                    ? `${formatUnits(BigInt(quote.fees.integratorFee.amount), getTokenDecimals(sellSymbol, supportedChainId))} ${sellSymbol}`
+                    : swapQuote?.fees?.integratorFee
+                      ? `${formatUnits(BigInt(swapQuote.fees.integratorFee.amount), getTokenDecimals(tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH", supportedChainId))} ${tokens.find((t) => t.address === buyToken)?.symbol ?? ""}`
+                      : ""}
                 </p>
               )}
               {receiveUsd != null && receiveUsd > 0 && (
@@ -480,12 +608,12 @@ export function Swap() {
                 >
                   {quoteLoading ? "Getting quote..." : "Get Quote"}
                 </button>
-                {quote && (
+                {(quote || swapQuote) && (
                   <button
                     onClick={executeSwap}
                     className="w-full py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-900 font-semibold transition"
                   >
-                    Sign & Swap (No Gas!)
+                    {swapQuote ? "Sign & Swap (you pay gas)" : "Sign & Swap (No Gas!)"}
                   </button>
                 )}
               </>
@@ -519,12 +647,23 @@ export function Swap() {
             {swapStatus === "error" && (
               <div className="space-y-2">
                 <p className="text-red-400 text-sm font-medium">{swapError}</p>
-                <button
-                  onClick={resetSwap}
-                  className="w-full py-2 rounded-lg border border-slate-600 text-slate-300 hover:text-white text-sm font-medium"
-                >
-                  Try Again
-                </button>
+                <div className="flex flex-col gap-2">
+                  {needsManualApproval && quote?.issues?.allowance && (
+                    <button
+                      onClick={doApprove}
+                      disabled={approvingInProgress}
+                      className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-semibold"
+                    >
+                      {approvingInProgress ? "Check your wallet…" : `Approve ${sellSymbol} (pay gas once)`}
+                    </button>
+                  )}
+                  <button
+                    onClick={resetSwap}
+                    className="w-full py-2 rounded-lg border border-slate-600 text-slate-300 hover:text-white text-sm font-medium"
+                  >
+                    Try Again
+                  </button>
+                </div>
               </div>
             )}
           </div>

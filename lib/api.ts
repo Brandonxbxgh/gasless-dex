@@ -118,6 +118,64 @@ function buildQuery(params: Record<string, string | number | undefined>): string
   return search.toString();
 }
 
+/** 0x native token sentinel (ETH, BNB, MATIC when selling native) */
+export const NATIVE_TOKEN_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
+
+export interface SwapQuoteResponse {
+  liquidityAvailable: boolean;
+  buyAmount: string;
+  sellAmount: string;
+  buyToken: string;
+  sellToken: string;
+  transaction: {
+    to: string;
+    data: string;
+    value: string;
+    gas?: string;
+    gasPrice?: string;
+  };
+  fees?: {
+    integratorFee?: { amount: string; token: string; type: string };
+    zeroExFee?: { amount: string; token: string; type: string };
+    gasFee?: { amount: string; token: string; type: string };
+  };
+  issues?: {
+    allowance?: { actual: string; spender: string };
+    balance?: { token: string; actual: string; expected: string };
+  };
+}
+
+/** Get quote for selling native token (ETH/BNB/MATIC) - user pays gas, gets tx to sign */
+export async function getSwapQuote(params: {
+  chainId: number;
+  sellToken: string;
+  buyToken: string;
+  sellAmount: string;
+  taker: string;
+  recipient?: string;
+  swapFeeBps?: string;
+  swapFeeRecipient?: string;
+  swapFeeToken?: string;
+  tradeSurplusRecipient?: string;
+  slippageBps?: number;
+}): Promise<SwapQuoteResponse> {
+  const qs = buildQuery({
+    chainId: params.chainId,
+    sellToken: params.sellToken,
+    buyToken: params.buyToken,
+    sellAmount: params.sellAmount,
+    taker: params.taker,
+    recipient: params.recipient,
+    swapFeeBps: params.swapFeeBps,
+    swapFeeRecipient: params.swapFeeRecipient,
+    swapFeeToken: params.swapFeeToken,
+    tradeSurplusRecipient: params.tradeSurplusRecipient,
+    slippageBps: params.slippageBps ?? 100,
+  });
+  const res = await fetch(`/api/swap-quote?${qs}`);
+  return handleResponse(res) as Promise<SwapQuoteResponse>;
+}
+
 /** Get firm quote (taker required) - via our API route to avoid CORS */
 export async function getGaslessQuote(
   params: GaslessQuoteParams
