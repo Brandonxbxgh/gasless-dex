@@ -44,6 +44,9 @@ const EXPLORER_URL: Record<SupportedChainId, string> = {
 const SWAP_FEE_BPS = "10";
 const SWAP_FEE_RECIPIENT = process.env.NEXT_PUBLIC_SWAP_FEE_RECIPIENT || "";
 
+/** 0x Allowance Holder (same on BNB, Ethereum, Base, etc.) – used when 0x doesn't return issues.allowance */
+const ALLOWANCE_HOLDER = "0x0000000000001fF3684f28c67538d4D072C22734" as const;
+
 function truncateAddress(addr: string) {
   if (!addr || addr.length < 10) return addr;
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
@@ -367,8 +370,8 @@ export function Swap() {
   );
 
   const doApprove = useCallback(async () => {
-    if (!quote?.issues?.allowance || !walletClient || !address) return;
-    const spender = quote.issues.allowance.spender as `0x${string}`;
+    if (!quote || !walletClient || !address) return;
+    const spender = (quote.issues?.allowance?.spender ?? ALLOWANCE_HOLDER) as `0x${string}`;
     setApprovingInProgress(true);
     setSwapError(null);
     setSwapStatus("signing");
@@ -648,13 +651,31 @@ export function Swap() {
                 >
                   {quoteLoading ? "Getting quote..." : "Get Quote"}
                 </button>
+                {quote && !isSellingNative && !quote.approval && (
+                  <div className="space-y-1">
+                    <p className="text-amber-300 text-xs font-medium">Step 1: Approve {sellSymbol} (pay gas once). Required or you’ll get “transfer amount exceeds allowance”.</p>
+                    <button
+                      type="button"
+                      onClick={doApprove}
+                      disabled={approvingInProgress}
+                      className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-semibold"
+                    >
+                      {approvingInProgress ? "Check your wallet…" : `Approve ${sellSymbol}`}
+                    </button>
+                  </div>
+                )}
                 {(quote || swapQuote) && (
-                  <button
-                    onClick={executeSwap}
-                    className="w-full py-3.5 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-400 hover:from-sky-400 hover:to-cyan-300 text-white font-semibold uppercase tracking-wide transition shadow-[0_0_20px_rgba(14,165,233,0.3)]"
-                  >
-                    {swapQuote ? "Sign & Swap (you pay gas)" : "Sign & Swap (No Gas!)"}
-                  </button>
+                  <>
+                    {quote && !isSellingNative && !quote.approval && (
+                      <p className="text-slate-400 text-xs">Step 2: Sign the swap (no gas)</p>
+                    )}
+                    <button
+                      onClick={executeSwap}
+                      className="w-full py-3.5 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-400 hover:from-sky-400 hover:to-cyan-300 text-white font-semibold uppercase tracking-wide transition shadow-[0_0_20px_rgba(14,165,233,0.3)]"
+                    >
+                      {swapQuote ? "Sign & Swap (you pay gas)" : "Sign & Swap (No Gas!)"}
+                    </button>
+                  </>
                 )}
               </>
             )}
