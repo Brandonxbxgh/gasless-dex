@@ -47,7 +47,7 @@ export default function HowItWorksPage() {
         </p>
 
         <section className="mb-10">
-          <h2 className="text-lg font-semibold text-emerald-300 mb-3">
+          <h2 className="text-lg font-semibold text-sky-300 mb-3">
             Two types of swaps
           </h2>
           <div className="space-y-6 text-slate-200">
@@ -73,7 +73,7 @@ export default function HowItWorksPage() {
         </section>
 
         <section className="mb-10">
-          <h2 className="text-lg font-semibold text-emerald-300 mb-3">
+          <h2 className="text-lg font-semibold text-sky-300 mb-3">
             What you send vs what you receive
           </h2>
           <ul className="space-y-2 text-slate-200 text-sm">
@@ -87,7 +87,7 @@ export default function HowItWorksPage() {
         </section>
 
         <section className="mb-10">
-          <h2 className="text-lg font-semibold text-emerald-300 mb-3">
+          <h2 className="text-lg font-semibold text-sky-300 mb-3">
             Available pairs by chain
           </h2>
           <p className="text-slate-200 text-sm mb-4">
@@ -122,7 +122,7 @@ export default function HowItWorksPage() {
         </section>
 
         <section className="mb-10">
-          <h2 className="text-lg font-semibold text-emerald-300 mb-3">
+          <h2 className="text-lg font-semibold text-sky-300 mb-3">
             Gasless vs requires gas (summary)
           </h2>
           <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 sm:p-5 text-sm text-slate-200 space-y-2">
@@ -136,7 +136,7 @@ export default function HowItWorksPage() {
         </section>
 
         <section className="mb-10 rounded-xl bg-slate-800/40 border border-slate-700/30 p-4 sm:p-5">
-          <h2 className="text-lg font-semibold text-emerald-300 mb-2">
+          <h2 className="text-lg font-semibold text-sky-300 mb-2">
             Need help?
           </h2>
           <p className="text-sm text-slate-200 mb-2">
@@ -146,7 +146,7 @@ export default function HowItWorksPage() {
             href="https://t.me/brandonxbxgh"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-emerald-400 hover:text-emerald-300 font-medium text-sm"
+            className="text-sky-400 hover:text-sky-300 font-medium text-sm"
           >
             t.me/brandonxbxgh →
           </a>
@@ -155,7 +155,7 @@ export default function HowItWorksPage() {
         <p className="text-center">
           <Link
             href="/"
-            className="inline-flex items-center justify-center rounded-xl bg-emerald-500 hover:bg-emerald-400 px-5 py-2.5 text-sm font-medium text-white transition-colors"
+            className="inline-flex items-center justify-center rounded-xl bg-sky-500 hover:bg-sky-400 px-5 py-2.5 text-sm font-medium text-white transition-colors"
           >
             Back to Swap
           </Link>

@@ -3,14 +3,14 @@
 @tailwind utilities;
 
 :root {
-  --delta-primary: #10b981;
-  --delta-primary-bright: #34d399;
-  --delta-accent: #14b8a6;
+  --delta-primary: #0ea5e9;
+  --delta-primary-bright: #38bdf8;
+  --delta-accent: #06b6d4;
   --delta-success: #22c55d;
-  --delta-card: #282c34;
-  --delta-card-border: rgba(16, 185, 129, 0.5);
-  --delta-text: #f1f5f9;
+  --delta-card: #1e293b;
+  --delta-card-border: rgba(56, 189, 248, 0.4);
+  --delta-text: #f8fafc;
   --delta-text-muted: #cbd5e1;
-  --delta-bg: #1a1d23;
-  --delta-glow: rgba(16, 185, 129, 0.25);
+  --delta-bg: #0f172a;
+  --delta-glow: rgba(14, 165, 233, 0.2);
 }

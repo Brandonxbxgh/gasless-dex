@@ -9,7 +9,7 @@ import "@rainbow-me/rainbowkit/styles.css";
 const queryClient = new QueryClient();
 
 const theme = darkTheme({
-  accentColor: "#10b981",
+  accentColor: "#0ea5e9",
   accentColorForeground: "white",
   borderRadius: "large",
 });

@@ -470,24 +470,24 @@ export function Swap() {
   }, [sellToken, buyToken, supportedChainId]);
 
   return (
-    <div className="w-full max-w-md mx-auto rounded-2xl border-2 border-emerald-500/40 p-4 sm:p-6 shadow-2xl shadow-emerald-500/10 bg-[var(--delta-card)]">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
-        <h2 className="text-lg sm:text-xl font-semibold text-white">Swap</h2>
-        <div className="flex flex-wrap gap-1.5">
-          {supportedChains.map((ch) => (
-            <button
-              key={ch.id}
-              onClick={() => switchChain?.({ chainId: ch.id })}
-              className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${
-                supportedChainId === ch.id
-                  ? "bg-emerald-500 text-white border border-emerald-400/60 shadow-md shadow-emerald-500/20"
-                  : "bg-slate-700/80 text-slate-300 hover:text-white hover:bg-slate-600/80 border border-slate-600/50"
-              }`}
-            >
-              {ch.name}
-            </button>
-          ))}
-        </div>
+    <div className="w-full max-w-md mx-auto rounded-2xl border-2 border-sky-400/50 p-4 sm:p-6 shadow-[0_0_32px_rgba(14,165,233,0.15)] bg-[var(--delta-card)]">
+      <h1 className="text-xl sm:text-2xl font-bold text-center mb-4 bg-gradient-to-r from-cyan-400 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">
+        DeltaChainLabs
+      </h1>
+      <div className="flex flex-wrap justify-center gap-2 mb-5">
+        {supportedChains.map((ch) => (
+          <button
+            key={ch.id}
+            onClick={() => switchChain?.({ chainId: ch.id })}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition border ${
+              supportedChainId === ch.id
+                ? "bg-sky-500/20 text-white border-sky-400/60 shadow-[0_0_12px_rgba(14,165,233,0.2)]"
+                : "bg-transparent text-slate-300 border-slate-500/70 hover:text-white hover:border-slate-400"
+            }`}
+          >
+            {ch.name}
+          </button>
+        ))}
       </div>
 
       {!isConnected ? (
@@ -498,15 +498,15 @@ export function Swap() {
       ) : (
         <div key={address ?? "connected"}>
         <>
-          <div className="rounded-lg bg-slate-800/60 border border-slate-600/40 px-3 py-2 mb-4 space-y-1">
-            <p className="text-xs text-slate-300">
-              Connected: <span className="text-slate-200 font-mono">{address ? truncateAddress(address) : ""}</span>
+          <div className="rounded-lg bg-slate-800/70 border border-slate-600 px-3 py-2 mb-4 space-y-1">
+            <p className="text-xs text-slate-200">
+              Connected: <span className="text-white font-mono">{address ? truncateAddress(address) : ""}</span>
             </p>
-            <p className="text-xs text-slate-300">
-              Receiving to: <span className="text-slate-200 font-mono">{receiveAddress ? truncateAddress(receiveAddress) : ""}</span>
+            <p className="text-xs text-slate-200">
+              Receiving to: <span className="text-white font-mono">{receiveAddress ? truncateAddress(receiveAddress) : ""}</span>
             </p>
             <div>
-              <label className="text-xs text-slate-300 block mb-1">Send to different address (optional)</label>
+              <label className="text-xs text-slate-200 block mb-1">Send to different address (optional)</label>
               <input
                 type="text"
                 placeholder="0x..."
@@ -515,7 +515,7 @@ export function Swap() {
                   setCustomRecipient(e.target.value);
                   setQuote(null);
                 }}
-                className="w-full bg-slate-700/80 text-white text-sm rounded-lg px-3 py-2 border border-slate-600 placeholder:text-slate-500 focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400/50"
+                className="w-full bg-slate-700/80 text-white text-sm rounded-lg px-3 py-2 border border-slate-600 placeholder:text-slate-500 focus:ring-2 focus:ring-sky-400 focus:border-sky-400/50"
               />
               {customRecipient.trim() && !isAddress(customRecipient.trim()) && (
                 <p className="text-xs text-amber-400 mt-1">Enter a valid EVM address</p>
@@ -525,8 +525,8 @@ export function Swap() {
 
           <div className="space-y-3">
             {/* From row: amount + token dropdown */}
-            <div className="rounded-xl bg-slate-800/60 p-3 sm:p-4 border border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.08)]">
-              <label className="text-xs font-medium text-slate-300 block mb-2">From</label>
+            <div className="rounded-xl bg-slate-800/50 p-3 sm:p-4 border border-slate-600/80">
+              <label className="text-xs font-medium text-white block mb-2">From</label>
               {isSellingNative && (
                 <p className="text-xs text-amber-400/90 mb-1">Sending native {displaySellSymbol} (you pay gas for this swap)</p>
               )}
@@ -548,7 +548,7 @@ export function Swap() {
                     setSellToken(e.target.value as `0x${string}`);
                     setQuote(null);
                   }}
-                  className="bg-slate-700 text-white rounded-lg px-3 py-2 text-sm font-medium border border-emerald-500/40 min-w-[5rem] sm:min-w-[6rem] cursor-pointer focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400/50"
+                  className="bg-slate-700 text-white rounded-lg px-3 py-2 text-sm font-medium border border-slate-500 min-w-[5rem] sm:min-w-[6rem] cursor-pointer focus:ring-2 focus:ring-sky-400 focus:border-sky-400"
                   aria-label="Select token to sell"
                 >
                   {tokens.map((t) => (
@@ -565,7 +565,7 @@ export function Swap() {
               <button
                 type="button"
                 onClick={flipTokens}
-                className="p-2 rounded-full bg-emerald-500/20 border-2 border-emerald-400/50 text-emerald-300 hover:bg-emerald-500/40 hover:text-white transition shadow-[0_0_10px_rgba(16,185,129,0.2)]"
+                className="p-2 rounded-full bg-sky-500/20 border-2 border-sky-400/50 text-sky-300 hover:bg-sky-500/40 hover:text-white transition"
                 aria-label="Swap from and to"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -575,10 +575,10 @@ export function Swap() {
             </div>
 
             {/* To row: amount + token dropdown */}
-            <div className="rounded-xl bg-slate-800/60 p-3 sm:p-4 border border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.08)]">
-              <label className="text-xs font-medium text-slate-300 block mb-2">To</label>
+            <div className="rounded-xl bg-slate-800/50 p-3 sm:p-4 border border-slate-600/80">
+              <label className="text-xs font-medium text-white block mb-2">To</label>
               {isBuyingNative && (
-                <p className="text-xs text-emerald-400/90 mb-1">Receiving real native {NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH"}</p>
+                <p className="text-xs text-sky-300 mb-1">Receiving real native {NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH"}</p>
               )}
               {buyToken === WRAPPED_NATIVE[supportedChainId] && (
                 <p className="text-xs text-slate-300 mb-1">Receiving {tokens.find((t) => t.address === buyToken)?.symbol ?? "WETH"} (wrapped), not native</p>
@@ -599,7 +599,7 @@ export function Swap() {
                     setQuote(null);
                     setSwapQuote(null);
                   }}
-                  className="bg-slate-700 text-white rounded-lg px-3 py-2 text-sm font-medium border border-emerald-500/40 min-w-[5rem] sm:min-w-[6rem] cursor-pointer focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400/50"
+                  className="bg-slate-700 text-white rounded-lg px-3 py-2 text-sm font-medium border border-slate-500 min-w-[5rem] sm:min-w-[6rem] cursor-pointer focus:ring-2 focus:ring-sky-400 focus:border-sky-400"
                   aria-label="Select token to receive"
                 >
                   {buyTokenOptions.map((t) => (
@@ -610,7 +610,7 @@ export function Swap() {
                 </select>
               </div>
               {(quote?.fees?.integratorFee || swapQuote?.fees?.integratorFee) && (
-                <p className="text-xs text-slate-300 mt-2">
+                <p className="text-xs text-slate-200 mt-2">
                   Fee (0.1%): {quote?.fees?.integratorFee
                     ? `${formatUnits(BigInt(quote.fees.integratorFee.amount), getTokenDecimals(sellSymbolForLogic, supportedChainId))} ${sellSymbol}`
                     : swapQuote?.fees?.integratorFee
@@ -624,7 +624,7 @@ export function Swap() {
                 </p>
               )}
               {receiveUsd != null && receiveUsd > 0 && (
-                <p className="text-sm text-emerald-400/90 font-medium mt-2">
+                <p className="text-sm text-sky-300 font-medium mt-2">
                   ≈ ${receiveUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
                 </p>
               )}
@@ -644,14 +644,14 @@ export function Swap() {
                 <button
                   onClick={fetchQuote}
                   disabled={!sellAmount || amountNum <= 0 || quoteLoading || isBelowMin}
-                  className="w-full py-3.5 rounded-full bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold uppercase tracking-wide transition shadow-lg shadow-emerald-500/25"
+                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-400 hover:from-sky-400 hover:to-cyan-300 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold uppercase tracking-wide transition shadow-[0_0_20px_rgba(14,165,233,0.3)]"
                 >
                   {quoteLoading ? "Getting quote..." : "Get Quote"}
                 </button>
                 {(quote || swapQuote) && (
                   <button
                     onClick={executeSwap}
-                    className="w-full py-3.5 rounded-full bg-emerald-500 hover:bg-emerald-400 text-white font-semibold uppercase tracking-wide transition shadow-lg shadow-emerald-500/25"
+                    className="w-full py-3.5 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-400 hover:from-sky-400 hover:to-cyan-300 text-white font-semibold uppercase tracking-wide transition shadow-[0_0_20px_rgba(14,165,233,0.3)]"
                   >
                     {swapQuote ? "Sign & Swap (you pay gas)" : "Sign & Swap (No Gas!)"}
                   </button>
@@ -675,13 +675,13 @@ export function Swap() {
             )}
             {swapStatus === "success" && (
               <div className="space-y-2">
-                <p className="text-emerald-400 text-center font-medium">Swap complete!</p>
+                <p className="text-sky-300 text-center font-medium">Swap complete!</p>
                 {txHash && (
                   <a
                     href={`${EXPLORER_URL[supportedChainId] || "https://basescan.org"}/tx/${txHash}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block text-center text-sm text-emerald-400 hover:underline"
+                    className="block text-center text-sm text-sky-400 hover:underline"
                   >
                     View on explorer
                   </a>

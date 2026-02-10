@@ -15,11 +15,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className="min-h-screen bg-[var(--delta-bg)] text-[var(--delta-text)] antialiased relative overflow-x-hidden">
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(16,185,129,0.08),transparent),linear-gradient(to_bottom,rgba(26,29,35,0.98),#1a1d23)] pointer-events-none" aria-hidden />
+      <body className="min-h-screen bg-[var(--delta-bg)] text-[var(--delta-text)] antialiased">
         <Providers>
-          <Header />
-          {children}
+          <div className="relative z-10 min-h-screen">
+            <Header />
+            {children}
+          </div>
         </Providers>
       </body>
     </html>
