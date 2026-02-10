@@ -177,18 +177,21 @@ export function Swap() {
     ? customRecipient.trim()
     : address ?? "";
 
-  const sellSymbol = tokens.find((t) => t.address === sellToken)?.symbol ?? "USDC";
-  const minSellAmount = MIN_SELL_AMOUNT[sellSymbol] ?? 1;
+  const sellSymbolForLogic = tokens.find((t) => t.address === sellToken)?.symbol ?? "USDC";
+  const displaySellSymbol = isSellingNative ? (NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH") : sellSymbolForLogic;
+  const sellSymbol = displaySellSymbol;
+  const minSellAmount = MIN_SELL_AMOUNT[sellSymbolForLogic] ?? 1;
   const amountNum = sellAmount ? parseFloat(sellAmount) : 0;
   const isBelowMin = amountNum > 0 && amountNum < minSellAmount;
 
   const fetchQuote = useCallback(async () => {
     if (!address || !sellAmount || parseFloat(sellAmount) <= 0) return;
-    const sellSymbol = tokens.find((t) => t.address === sellToken)?.symbol ?? "USDC";
-    const minAmount = MIN_SELL_AMOUNT[sellSymbol] ?? 1;
+    const sellSymbolForLogic = tokens.find((t) => t.address === sellToken)?.symbol ?? "USDC";
+    const minAmount = MIN_SELL_AMOUNT[sellSymbolForLogic] ?? 1;
     const amountNum = parseFloat(sellAmount);
     if (amountNum < minAmount) {
-      setQuoteError(`Minimum sell amount is ${minAmount} ${sellSymbol}. Try at least ${minAmount} ${sellSymbol} or check your wallet balance.`);
+      const displaySym = isSellingNative ? (NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH") : sellSymbolForLogic;
+      setQuoteError(`Minimum sell amount is ${minAmount} ${displaySym}. Try at least ${minAmount} ${displaySym} or check your wallet balance.`);
       setQuote(null);
       setSwapQuote(null);
       return;
@@ -199,7 +202,7 @@ export function Swap() {
     setReceiveUsd(null);
     setQuoteLoading(true);
     try {
-      const decimals = getTokenDecimals(sellSymbol, supportedChainId);
+      const decimals = getTokenDecimals(sellSymbolForLogic, supportedChainId);
       const amountWei = parseUnits(sellAmount, decimals).toString();
 
       if (isSellingNative) {
@@ -273,7 +276,8 @@ export function Swap() {
         lower.includes("sell amount too small") ||
         lower.includes("provided sell amount too small");
       if (isAmountOrBalanceError && amountNum < minAmount) {
-        setQuoteError(`Sell at least ${minAmount} ${sellSymbol} (you entered ${sellAmount}). Check your wallet balance.`);
+        const displaySym = isSellingNative ? (NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH") : sellSymbolForLogic;
+        setQuoteError(`Sell at least ${minAmount} ${displaySym} (you entered ${sellAmount}). Check your wallet balance.`);
       } else if (
         (lower.includes("sell amount too small") || lower.includes("provided sell amount too small")) &&
         amountNum >= minAmount
@@ -511,6 +515,9 @@ export function Swap() {
             {/* From row: amount + token dropdown */}
             <div className="rounded-xl bg-slate-800/80 p-3 sm:p-4 border border-slate-600/50">
               <label className="text-xs font-medium text-slate-400 block mb-2">From</label>
+              {isSellingNative && (
+                <p className="text-xs text-amber-400/90 mb-1">Sending native {displaySellSymbol} (you pay gas for this swap)</p>
+              )}
               <div className="flex gap-2 items-center">
                 <input
                   type="text"
@@ -534,7 +541,7 @@ export function Swap() {
                 >
                   {tokens.map((t) => (
                     <option key={t.address} value={t.address}>
-                      {t.symbol}
+                      {t.address === WRAPPED_NATIVE[supportedChainId] ? (NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH") : t.symbol}
                     </option>
                   ))}
                 </select>
@@ -558,6 +565,9 @@ export function Swap() {
             {/* To row: amount + token dropdown */}
             <div className="rounded-xl bg-slate-800/80 p-3 sm:p-4 border border-slate-600/50">
               <label className="text-xs font-medium text-slate-400 block mb-2">To</label>
+              {buyToken === WRAPPED_NATIVE[supportedChainId] && (
+                <p className="text-xs text-slate-400 mb-1">Receiving {tokens.find((t) => t.address === buyToken)?.symbol ?? "WETH"} (wrapped), not native</p>
+              )}
               <div className="flex gap-2 items-center">
                 <span className="flex-1 min-w-0 text-white text-lg font-medium truncate">
                   {(quote || swapQuote)
