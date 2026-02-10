@@ -86,6 +86,17 @@ export interface SignedApprovalData {
   };
 }
 
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status?: number,
+    public details?: unknown
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 async function handleResponse(res: Response) {
   const ct = res.headers.get("content-type") || "";
   const data = ct.includes("application/json")
@@ -93,7 +104,8 @@ async function handleResponse(res: Response) {
     : {};
   if (!res.ok) {
     const msg = data?.error || data?.reason || data?.message || `Request failed (${res.status})`;
-    throw new Error(msg);
+    const err = new ApiError(msg, res.status, data?.details ?? data);
+    throw err;
   }
   return data;
 }

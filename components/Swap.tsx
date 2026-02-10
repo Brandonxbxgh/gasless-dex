@@ -8,6 +8,7 @@ import {
   getGaslessQuote,
   submitGaslessSwap,
   getGaslessStatus,
+  ApiError,
   type GaslessQuoteResponse,
 } from "@/lib/api";
 import { splitSignature, SignatureType } from "@/lib/signature";
@@ -34,7 +35,7 @@ function truncateAddress(addr: string) {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
-// Display as native names (ETH, BNB, MATIC); we still use wrapped token addresses for the API
+// Base decimals per symbol (most chains use these)
 const TOKEN_DECIMALS: Record<string, number> = {
   USDC: 6,
   USDT: 6,
@@ -42,6 +43,12 @@ const TOKEN_DECIMALS: Record<string, number> = {
   MATIC: 18,
   BNB: 18,
 };
+
+// BNB Chain USDT is 18 decimals (Binance-Peg BSC-USD); other chains use 6 for USDT
+function getTokenDecimals(symbol: string, chainId: SupportedChainId): number {
+  if (chainId === 56 && symbol === "USDT") return 18;
+  return TOKEN_DECIMALS[symbol] ?? 18;
+}
 
 // Only native/supported tokens per chain (no bridged tokens; BNB has no native USDC)
 const TOKEN_OPTIONS: Record<SupportedChainId, { address: `0x${string}`; symbol: string }[]> = {
@@ -164,7 +171,7 @@ export function Swap() {
     setReceiveUsd(null);
     setQuoteLoading(true);
     try {
-      const decimals = TOKEN_DECIMALS[sellSymbol] ?? 6;
+      const decimals = getTokenDecimals(sellSymbol, supportedChainId);
       const amountWei = parseUnits(sellAmount, decimals).toString();
       const res = await getGaslessQuote({
         chainId: supportedChainId,
@@ -183,7 +190,8 @@ export function Swap() {
           );
           const { usd } = (await priceRes.json()) as { usd?: number | null };
           if (typeof usd === "number" && usd > 0) {
-            const buyDecimals = TOKEN_DECIMALS[tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH"] ?? 18;
+            const buySymbolForDecimals = tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH";
+          const buyDecimals = getTokenDecimals(buySymbolForDecimals, supportedChainId);
             const buyAmountHuman = Number(formatUnits(BigInt(res.buyAmount), buyDecimals));
             setReceiveUsd(buyAmountHuman * usd);
           }
@@ -200,9 +208,18 @@ export function Swap() {
         lower.includes("insufficient balance") ||
         lower.includes("sell amount too small") ||
         lower.includes("provided sell amount too small");
-      // Only suggest our minimum when the user is actually below it; otherwise show the real API error
       if (isAmountOrBalanceError && amountNum < minAmount) {
         setQuoteError(`Sell at least ${minAmount} ${sellSymbol} (you entered ${sellAmount}). Check your wallet balance.`);
+      } else if (
+        (lower.includes("sell amount too small") || lower.includes("provided sell amount too small")) &&
+        amountNum >= minAmount
+      ) {
+        const onBnb = supportedChainId === 56;
+        setQuoteError(
+          onBnb
+            ? "On BNB Smart Chain the protocol requires a higher minimum for gasless swaps (try $50–100+ USDT), or use Ethereum/Base/Arbitrum for smaller amounts."
+            : "The protocol requires a larger minimum for this pair on this network. Try a higher amount, or use Ethereum/Base/Arbitrum where smaller trades may be supported."
+        );
       } else {
         setQuoteError(msg);
       }
@@ -413,7 +430,7 @@ export function Swap() {
                   {quote
                     ? formatUnits(
                         BigInt(quote.buyAmount),
-                        TOKEN_DECIMALS[tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH"] ?? 18
+                        getTokenDecimals(tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH", supportedChainId)
                       )
                     : "0.0"}
                 </span>
@@ -435,7 +452,7 @@ export function Swap() {
               </div>
               {quote?.fees?.integratorFee && (
                 <p className="text-xs text-slate-400 mt-2">
-                  Fee (0.1%): {formatUnits(BigInt(quote.fees.integratorFee.amount), 6)} {tokens.find((t) => t.address === sellToken)?.symbol}
+                  Fee (0.1%): {formatUnits(BigInt(quote.fees.integratorFee.amount), getTokenDecimals(sellSymbol, supportedChainId))} {sellSymbol}
                 </p>
               )}
               {receiveUsd != null && receiveUsd > 0 && (
