@@ -47,7 +47,7 @@ export default function HowItWorksPage() {
         </p>
 
         <section className="mb-10">
-          <h2 className="text-lg font-semibold text-indigo-300 mb-3">
+          <h2 className="text-lg font-semibold text-cyan-300 mb-3">
             Two types of swaps
           </h2>
           <div className="space-y-6 text-slate-300">
@@ -57,7 +57,7 @@ export default function HowItWorksPage() {
                 When you <strong>sell a token</strong> (e.g. USDC, USDT, WETH, WBNB, WMATIC), you only sign a message. We submit the transaction and pay gas. You receive the buy token in your wallet with no extra step.
               </p>
               <p className="text-xs text-slate-400">
-                Pairs: stable ↔ wrapped native, or stable ↔ stable on the same chain. You receive <strong>wrapped</strong> (WETH, WBNB, WMATIC), not native ETH/BNB/MATIC.
+                Pairs: stable ↔ wrapped native, or stable ↔ stable on the same chain. You can also choose to receive <strong>real native</strong> (ETH, BNB, MATIC) via the “To” dropdown — select “ETH (native)” (or BNB/MATIC native) to get chain currency in your wallet.
               </p>
             </div>
             <div className="rounded-xl bg-slate-800/60 border border-amber-500/20 p-4 sm:p-5">
@@ -73,7 +73,7 @@ export default function HowItWorksPage() {
         </section>
 
         <section className="mb-10">
-          <h2 className="text-lg font-semibold text-indigo-300 mb-3">
+          <h2 className="text-lg font-semibold text-cyan-300 mb-3">
             What you send vs what you receive
           </h2>
           <ul className="space-y-2 text-slate-300 text-sm">
@@ -81,13 +81,13 @@ export default function HowItWorksPage() {
               <strong className="text-white">Sending (From):</strong> If you choose ETH, BNB, or MATIC in the dropdown, you’re sending <strong>native</strong> chain currency (one tx, you pay gas). If you choose USDC, USDT, WETH, etc., you’re sending that token (gasless when applicable).
             </li>
             <li>
-              <strong className="text-white">Receiving (To):</strong> If you choose WETH, WBNB, or WMATIC, you receive <strong>wrapped</strong> tokens, not native. We show “Receiving WETH (wrapped), not native” so it’s clear. Stables (USDC, USDT) are received as usual.
+              <strong className="text-white">Receiving (To):</strong> Choose <strong>“ETH (native)”</strong> (or BNB/MATIC native) to receive real chain currency. Choose WETH, WBNB, or WMATIC to receive <strong>wrapped</strong>; we show “Receiving WETH (wrapped), not native” so it’s clear. Stables (USDC, USDT) are received as usual.
             </li>
           </ul>
         </section>
 
         <section className="mb-10">
-          <h2 className="text-lg font-semibold text-indigo-300 mb-3">
+          <h2 className="text-lg font-semibold text-cyan-300 mb-3">
             Available pairs by chain
           </h2>
           <p className="text-slate-400 text-sm mb-4">
@@ -122,7 +122,7 @@ export default function HowItWorksPage() {
         </section>
 
         <section className="mb-10">
-          <h2 className="text-lg font-semibold text-indigo-300 mb-3">
+          <h2 className="text-lg font-semibold text-cyan-300 mb-3">
             Gasless vs requires gas (summary)
           </h2>
           <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 sm:p-5 text-sm text-slate-300 space-y-2">
@@ -155,7 +155,7 @@ export default function HowItWorksPage() {
         <p className="text-center">
           <Link
             href="/"
-            className="inline-flex items-center justify-center rounded-xl bg-indigo-600 hover:bg-indigo-500 px-5 py-2.5 text-sm font-medium text-white transition-colors"
+            className="inline-flex items-center justify-center rounded-xl bg-cyan-500 hover:bg-cyan-400 px-5 py-2.5 text-sm font-medium text-white transition-colors"
           >
             Back to Swap
           </Link>

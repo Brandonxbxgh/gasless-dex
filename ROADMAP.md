@@ -14,10 +14,8 @@
   - **Requires gas** — Pairs where the user pays gas (e.g. native ETH/BNB/MATIC → stable/wrapped).
 - Options: tabs (“Gasless” / “With gas”), or two sections, or a filter. Keep it minimal and professional.
 
-### 2. Receive in real native tokens
-- Today: buying “WETH/WBNB/WMATIC” gives **wrapped** only.
-- Goal: offer “Receive native ETH/BNB/MATIC” so the user gets real native in their wallet.
-- Implementation: check if 0x Swap API supports `buyToken: native` (or equivalent); if yes, add native as a receive option and use that in the quote/tx. If the API only delivers wrapped, consider an unwrap step (e.g. WETH → ETH) in the same flow or as a follow-up.
+### 2. Receive in real native tokens ✅ Done
+- **To** dropdown now includes “ETH (native)”, “BNB (native)”, “MATIC (native)”. Selecting one uses 0x Swap API with `buyToken: native` so the user receives real chain currency. Flip works (e.g. USDC → ETH native flips to ETH → USDC).
 
 ### 3. Swap from wrapped to stable / native
 - **Wrapped → stable** (e.g. WETH → USDC): already supported via gasless (ERC20 sell).
