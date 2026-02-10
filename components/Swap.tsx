@@ -604,7 +604,7 @@ export function Swap() {
                 >
                   {buyTokenOptions.map((t) => (
                     <option key={t.address} value={t.address}>
-                      {t.isNative ? `${t.symbol} (native)` : t.symbol}
+                      {"isNative" in t && t.isNative ? `${t.symbol} (native)` : t.symbol}
                     </option>
                   ))}
                 </select>
