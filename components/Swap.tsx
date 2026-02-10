@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo, useEffect } from "react";
-import { useAccount, useChainId, useSwitchChain, useWalletClient } from "wagmi";
+import { useAccount, useChainId, useSwitchChain, useWalletClient, useDisconnect } from "wagmi";
 import { parseUnits, formatUnits, isAddress, maxUint256 } from "viem";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import {
@@ -43,6 +43,20 @@ const EXPLORER_URL: Record<SupportedChainId, string> = {
 
 const SWAP_FEE_BPS = "10";
 const SWAP_FEE_RECIPIENT = process.env.NEXT_PUBLIC_SWAP_FEE_RECIPIENT || "";
+
+/** Prefer fee in stablecoin (USDC/USDT); otherwise use buy token, else sell token */
+function getPreferredFeeToken(
+  sellToken: `0x${string}`,
+  buyToken: `0x${string}`,
+  tokens: { address: `0x${string}`; symbol: string }[]
+): `0x${string}` {
+  const sellSym = tokens.find((t) => t.address === sellToken)?.symbol;
+  const buySym = buyToken === NATIVE_TOKEN_ADDRESS ? undefined : tokens.find((t) => t.address === buyToken)?.symbol;
+  const isStable = (s: string | undefined) => s === "USDC" || s === "USDT";
+  if (isStable(buySym)) return buyToken;
+  if (isStable(sellSym)) return sellToken;
+  return buyToken !== NATIVE_TOKEN_ADDRESS ? buyToken : sellToken;
+}
 
 /** 0x Allowance Holder (same on BNB, Ethereum, Base, etc.) – used when 0x doesn't return issues.allowance */
 const ALLOWANCE_HOLDER = "0x0000000000001fF3684f28c67538d4D072C22734" as const;
@@ -118,6 +132,7 @@ export function Swap() {
     ? (chainId as SupportedChainId)
     : 8453;
   const { data: walletClient } = useWalletClient();
+  const { disconnect } = useDisconnect();
 
   const [sellToken, setSellToken] = useState<`0x${string}`>(
     () => getDefaultSellToken(supportedChainId)
@@ -177,13 +192,14 @@ export function Swap() {
 
   const feeParams = useMemo(() => {
     if (!SWAP_FEE_RECIPIENT) return {};
+    const preferredFeeToken = getPreferredFeeToken(sellToken, buyToken, tokens);
     return {
       swapFeeBps: SWAP_FEE_BPS,
       swapFeeRecipient: SWAP_FEE_RECIPIENT,
-      swapFeeToken: sellToken,
+      swapFeeToken: preferredFeeToken,
       tradeSurplusRecipient: SWAP_FEE_RECIPIENT,
     };
-  }, [sellToken]);
+  }, [sellToken, buyToken, tokens]);
 
   const receiveAddress = customRecipient.trim() && isAddress(customRecipient.trim())
     ? customRecipient.trim()
@@ -228,7 +244,7 @@ export function Swap() {
           recipient: receiveAddress && receiveAddress !== address ? receiveAddress : undefined,
           swapFeeBps: feeParams.swapFeeBps,
           swapFeeRecipient: feeParams.swapFeeRecipient,
-          swapFeeToken: isSellingNative ? buyToken : sellToken,
+          swapFeeToken: feeParams.swapFeeToken ?? (isSellingNative ? buyToken : sellToken),
           tradeSurplusRecipient: feeParams.tradeSurplusRecipient,
           slippageBps: 100,
         });
@@ -394,6 +410,38 @@ export function Swap() {
     }
   }, [quote, walletClient, address, sellToken, signAndSubmitTrade]);
 
+  const doApproveForSwapQuote = useCallback(async () => {
+    if (!swapQuote?.transaction?.to || !walletClient || !address) return;
+    const spender = swapQuote.transaction.to as `0x${string}`;
+    setApprovingInProgress(true);
+    setSwapError(null);
+    setSwapStatus("signing");
+    try {
+      await walletClient.writeContract({
+        address: sellToken,
+        abi: ERC20_APPROVE_ABI,
+        functionName: "approve",
+        args: [spender, maxUint256],
+      });
+      setSwapStatus("signing");
+      const tx = swapQuote.transaction;
+      const hash = await walletClient.sendTransaction({
+        to: tx.to as `0x${string}`,
+        data: tx.data as `0x${string}`,
+        value: BigInt(tx.value),
+        gas: tx.gas ? BigInt(tx.gas) : undefined,
+        gasPrice: tx.gasPrice ? BigInt(tx.gasPrice) : undefined,
+      });
+      setTxHash(hash);
+      setSwapStatus("success");
+    } catch (e) {
+      setSwapError(e instanceof Error ? e.message : "Approval or swap failed");
+      setSwapStatus("error");
+    } finally {
+      setApprovingInProgress(false);
+    }
+  }, [swapQuote, walletClient, address, sellToken]);
+
   const executeSwap = useCallback(async () => {
     if ((!quote && !swapQuote) || !address || !walletClient) return;
     setSwapStatus("signing");
@@ -502,9 +550,18 @@ export function Swap() {
         <div key={address ?? "connected"}>
         <>
           <div className="rounded-lg bg-slate-800/70 border border-slate-600 px-3 py-2 mb-4 space-y-1">
-            <p className="text-xs text-slate-200">
-              Connected: <span className="text-white font-mono">{address ? truncateAddress(address) : ""}</span>
-            </p>
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <p className="text-xs text-slate-200">
+                Connected: <span className="text-white font-mono">{address ? truncateAddress(address) : ""}</span>
+              </p>
+              <button
+                type="button"
+                onClick={() => disconnect()}
+                className="text-xs text-slate-400 hover:text-white underline"
+              >
+                Disconnect
+              </button>
+            </div>
             <p className="text-xs text-slate-200">
               Receiving to: <span className="text-white font-mono">{receiveAddress ? truncateAddress(receiveAddress) : ""}</span>
             </p>
@@ -615,13 +672,18 @@ export function Swap() {
               {(quote?.fees?.integratorFee || swapQuote?.fees?.integratorFee) && (
                 <p className="text-xs text-slate-200 mt-2">
                   Fee (0.1%): {quote?.fees?.integratorFee
-                    ? `${formatUnits(BigInt(quote.fees.integratorFee.amount), getTokenDecimals(sellSymbolForLogic, supportedChainId))} ${sellSymbol}`
+                    ? (() => {
+                        const feeTokenAddr = quote.fees.integratorFee.token;
+                        const feeSym = tokens.find((t) => t.address === feeTokenAddr)?.symbol ?? sellSymbol;
+                        const feeDec = getTokenDecimals(feeSym, supportedChainId);
+                        return `${formatUnits(BigInt(quote.fees.integratorFee.amount), feeDec)} ${feeSym}`;
+                      })()
                     : swapQuote?.fees?.integratorFee
                       ? (() => {
-                          const feeInSellToken = isBuyingNative;
-                          const feeDec = feeInSellToken ? getTokenDecimals(sellSymbolForLogic, supportedChainId) : getTokenDecimals(tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH", supportedChainId);
-                          const feeSym = feeInSellToken ? sellSymbol : (tokens.find((t) => t.address === buyToken)?.symbol ?? NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH");
-                          return `${formatUnits(BigInt(swapQuote!.fees!.integratorFee!.amount), feeDec)} ${feeSym}`;
+                          const feeTokenAddr = swapQuote.fees.integratorFee.token;
+                          const feeSym = tokens.find((t) => t.address === feeTokenAddr)?.symbol ?? NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH";
+                          const feeDec = getTokenDecimals(feeSym, supportedChainId);
+                          return `${formatUnits(BigInt(swapQuote.fees.integratorFee.amount), feeDec)} ${feeSym}`;
                         })()
                       : ""}
                 </p>
@@ -664,17 +726,32 @@ export function Swap() {
                     </button>
                   </div>
                 )}
+                {swapQuote && !isSellingNative && (
+                  <div className="space-y-1">
+                    <p className="text-amber-300 text-xs font-medium">Step 1: Approve {sellSymbol} (pay gas once). Required when receiving real native — or you’ll get “transfer amount exceeds allowance”.</p>
+                    <button
+                      type="button"
+                      onClick={doApproveForSwapQuote}
+                      disabled={approvingInProgress}
+                      className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-semibold"
+                    >
+                      {approvingInProgress ? "Check your wallet…" : `Approve & Swap (receive ${NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH"})`}
+                    </button>
+                  </div>
+                )}
                 {(quote || swapQuote) && (
                   <>
-                    {quote && !isSellingNative && !quote.approval && (
+                    {(quote && !isSellingNative && !quote.approval) && (
                       <p className="text-slate-400 text-xs">Step 2: Sign the swap (no gas)</p>
                     )}
-                    <button
-                      onClick={executeSwap}
-                      className="w-full py-3.5 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-400 hover:from-sky-400 hover:to-cyan-300 text-white font-semibold uppercase tracking-wide transition shadow-[0_0_20px_rgba(14,165,233,0.3)]"
-                    >
-                      {swapQuote ? "Sign & Swap (you pay gas)" : "Sign & Swap (No Gas!)"}
-                    </button>
+                    {!(swapQuote && !isSellingNative) && (
+                      <button
+                        onClick={executeSwap}
+                        className="w-full py-3.5 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-400 hover:from-sky-400 hover:to-cyan-300 text-white font-semibold uppercase tracking-wide transition shadow-[0_0_20px_rgba(14,165,233,0.3)]"
+                      >
+                        {swapQuote ? "Sign & Swap (you pay gas)" : "Sign & Swap (No Gas!)"}
+                      </button>
+                    )}
                   </>
                 )}
               </>
@@ -726,6 +803,15 @@ export function Swap() {
                       className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-semibold"
                     >
                       {approvingInProgress ? "Check your wallet…" : `Approve ${sellSymbol} (pay gas once)`}
+                    </button>
+                  )}
+                  {swapQuote && !isSellingNative && (
+                    <button
+                      onClick={doApproveForSwapQuote}
+                      disabled={approvingInProgress}
+                      className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-semibold"
+                    >
+                      {approvingInProgress ? "Check your wallet…" : `Approve ${sellSymbol} & Swap`}
                     </button>
                   )}
                   <button
