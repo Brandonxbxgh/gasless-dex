@@ -49,10 +49,13 @@ function truncateAddress(addr: string) {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
-// Base decimals per symbol (most chains use these)
+// Base decimals per symbol (wrapped natives shown as WETH/WBNB/WMATIC in UI)
 const TOKEN_DECIMALS: Record<string, number> = {
   USDC: 6,
   USDT: 6,
+  WETH: 18,
+  WBNB: 18,
+  WMATIC: 18,
   ETH: 18,
   MATIC: 18,
   BNB: 18,
@@ -64,31 +67,31 @@ function getTokenDecimals(symbol: string, chainId: SupportedChainId): number {
   return TOKEN_DECIMALS[symbol] ?? 18;
 }
 
-// Only native/supported tokens per chain (no bridged tokens; BNB has no native USDC)
+// Only native/supported tokens per chain; wrapped natives labeled as WETH/WBNB/WMATIC (gasless gives wrapped, not native)
 const TOKEN_OPTIONS: Record<SupportedChainId, { address: `0x${string}`; symbol: string }[]> = {
   8453: [
     { address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as `0x${string}`, symbol: "USDC" },
     { address: "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2" as `0x${string}`, symbol: "USDT" },
-    { address: "0x4200000000000000000000000000000000000006" as `0x${string}`, symbol: "ETH" },
+    { address: "0x4200000000000000000000000000000000000006" as `0x${string}`, symbol: "WETH" },
   ],
   42161: [
     { address: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831" as `0x${string}`, symbol: "USDC" },
     { address: "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9" as `0x${string}`, symbol: "USDT" },
-    { address: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1" as `0x${string}`, symbol: "ETH" },
+    { address: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1" as `0x${string}`, symbol: "WETH" },
   ],
   137: [
     { address: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174" as `0x${string}`, symbol: "USDC" },
     { address: "0xc2132D05D31c914a87C6611C10748AEb04B58e8F" as `0x${string}`, symbol: "USDT" },
-    { address: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270" as `0x${string}`, symbol: "MATIC" },
+    { address: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270" as `0x${string}`, symbol: "WMATIC" },
   ],
   56: [
     { address: "0x55d398326f99059fF775485246999027B3197955" as `0x${string}`, symbol: "USDT" },
-    { address: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c" as `0x${string}`, symbol: "BNB" },
+    { address: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c" as `0x${string}`, symbol: "WBNB" },
   ],
   1: [
     { address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as `0x${string}`, symbol: "USDC" },
     { address: "0xdAC17F958D2ee523a2206206994597C13D831ec7" as `0x${string}`, symbol: "USDT" },
-    { address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as `0x${string}`, symbol: "ETH" },
+    { address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as `0x${string}`, symbol: "WETH" },
   ],
 };
 
@@ -96,6 +99,9 @@ const TOKEN_OPTIONS: Record<SupportedChainId, { address: `0x${string}`; symbol: 
 const MIN_SELL_AMOUNT: Record<string, number> = {
   USDC: 1,
   USDT: 1,
+  WETH: 0.001,
+  WBNB: 0.001,
+  WMATIC: 0.001,
   ETH: 0.001,
   MATIC: 0.001,
   BNB: 0.001,
@@ -360,6 +366,8 @@ export function Swap() {
         args: [spender, maxUint256],
       });
       setNeedsManualApproval(false);
+      setSwapError(null);
+      setSwapStatus("signing");
       await signAndSubmitTrade(null);
     } catch (e) {
       setSwapError(e instanceof Error ? e.message : "Approval failed");
@@ -423,7 +431,8 @@ export function Swap() {
 
       await signAndSubmitTrade(approvalDataToSubmit);
     } catch (e) {
-      setSwapError(e instanceof Error ? e.message : "Swap failed");
+      const msg = e instanceof Error ? e.message : "Swap failed";
+      setSwapError(msg);
       setSwapStatus("error");
     }
   }, [quote, swapQuote, address, walletClient, signAndSubmitTrade]);
@@ -620,9 +629,19 @@ export function Swap() {
               </>
             )}
             {(swapStatus === "signing" || swapStatus === "submitting") && (
-              <p className="text-center text-amber-300 font-medium py-2 text-sm">
-                {swapStatus === "signing" ? "Check your wallet to sign..." : "Submitting..."}
-              </p>
+              <div className="space-y-2">
+                <p className="text-center text-amber-300 font-medium py-2 text-sm">
+                  {swapStatus === "signing" ? "Check your wallet — sign the request (it’s a signature, not a transaction)." : "Submitting..."}
+                </p>
+                <p className="text-center text-slate-400 text-xs">If nothing appeared: check your wallet app for the request, or disconnect and reconnect. If you already signed, check your wallet balance or tx history — the swap may have gone through; click Cancel to reset.</p>
+                <button
+                  type="button"
+                  onClick={resetSwap}
+                  className="w-full py-2 rounded-lg border border-slate-600 text-slate-400 hover:text-white text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
             )}
             {swapStatus === "success" && (
               <div className="space-y-2">
