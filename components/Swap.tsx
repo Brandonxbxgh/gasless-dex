@@ -437,7 +437,7 @@ export function Swap() {
       } else if (tokenApprovalRequired && !gaslessApprovalAvailable) {
         setNeedsManualApproval(true);
         setSwapError(
-          "This token needs a one-time approval (you’ll pay gas once). Click “Approve” below, then sign in your wallet."
+          "This token needs a one-time approval (you’ll pay gas once). Click “Approve” below, then sign in your wallet. Without enough allowance, the swap fails with “transfer amount exceeds allowance”."
         );
         setSwapStatus("error");
         return;
@@ -719,7 +719,7 @@ export function Swap() {
           </div>
 
           <p className="text-xs text-slate-400 mt-3 text-center">
-            EVM wallets only. Tokens you sell leave your connected wallet; tokens you receive are sent to the address above (or your wallet if no custom address).
+            EVM wallets only. Tokens you sell leave your connected wallet; tokens you receive are sent to the address above (or your wallet if no custom address). If a swap fails with “transfer amount exceeds allowance”, approve the sell token first (Approve button when shown) then try again.
           </p>
           <p className="text-sm text-slate-300 mt-2 text-center">
             Gasless by DeltaChainLabs · Powered by 0x

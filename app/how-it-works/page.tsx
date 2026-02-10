@@ -88,6 +88,37 @@ export default function HowItWorksPage() {
 
         <section className="mb-10">
           <h2 className="text-lg font-semibold text-sky-300 mb-3">
+            Sending to a different wallet (recipient address)
+          </h2>
+          <p className="text-slate-200 text-sm mb-2">
+            If you enter another address in “Send to different address”, that address only receives the <strong>output</strong> of the swap. All of the following still apply:
+          </p>
+          <ul className="space-y-1.5 text-slate-200 text-sm list-disc list-inside mb-2">
+            <li><strong className="text-white">What you sell</strong> always comes from <strong>your connected wallet</strong> only. No one else’s funds are used.</li>
+            <li><strong className="text-white">0x</strong> runs the swap (DEX routing, execution). The app only forwards your recipient address to 0x.</li>
+            <li><strong className="text-white">The 0.1% fee</strong> goes to the app; the rest of the output goes to you (or to the address you entered).</li>
+          </ul>
+          <p className="text-slate-200 text-sm">
+            So: your tokens in → 0x swaps them → output (minus fee) goes to the address you chose. Nobody is “covering” your swap; you’re only choosing where the result is sent.
+          </p>
+        </section>
+
+        <section className="mb-10">
+          <h2 className="text-lg font-semibold text-sky-300 mb-3">
+            What allowance is and who it applies to
+          </h2>
+          <p className="text-slate-200 text-sm mb-2">
+            When you <strong>sell a token</strong> (e.g. USDT, USDC), the chain requires you to “approve” a contract to spend that token. That permission is called an <strong>allowance</strong>.
+          </p>
+          <ul className="space-y-1.5 text-slate-200 text-sm list-disc list-inside mb-2">
+            <li>The <strong>user</strong> (the swapper) sets the allowance. If a one-time “Approve” is needed, the <strong>user</strong> signs that transaction and pays gas for it (once per token).</li>
+            <li>The app and the app operator do not set or pay for the user’s allowance. The app only shows an “Approve” button when 0x says allowance is required.</li>
+            <li>If the swap fails with “transfer amount exceeds allowance”, it means the user’s allowance was too low; the user needs to approve again (or approve a higher amount) and retry.</li>
+          </ul>
+        </section>
+
+        <section className="mb-10">
+          <h2 className="text-lg font-semibold text-sky-300 mb-3">
             Available pairs by chain
           </h2>
           <p className="text-slate-200 text-sm mb-4">
