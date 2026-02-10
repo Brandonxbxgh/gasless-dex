@@ -388,8 +388,9 @@ export function Swap() {
         setSwapStatus("success");
         return;
       }
-      const tokenApprovalRequired = quote!.issues?.allowance != null;
-      const gaslessApprovalAvailable = quote!.approval != null;
+      if (!quote) return;
+      const tokenApprovalRequired = quote.issues?.allowance != null;
+      const gaslessApprovalAvailable = quote.approval != null;
 
       let approvalDataToSubmit: ApprovalPayload | null = null;
 
