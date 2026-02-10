@@ -15,7 +15,8 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className="min-h-screen bg-[var(--delta-bg)] bg-gradient-to-br from-slate-950 via-slate-900 to-cyan-950/30 text-[var(--delta-text)] antialiased">
+      <body className="min-h-screen bg-[var(--delta-bg)] text-[var(--delta-text)] antialiased relative overflow-x-hidden">
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(16,185,129,0.08),transparent),linear-gradient(to_bottom,rgba(26,29,35,0.98),#1a1d23)] pointer-events-none" aria-hidden />
         <Providers>
           <Header />
           {children}

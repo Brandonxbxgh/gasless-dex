@@ -13,7 +13,7 @@ export function Header() {
       <nav className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <Link
           href="/"
-          className="text-lg font-semibold tracking-tight text-white hover:text-indigo-300 transition-colors"
+          className="text-lg font-semibold tracking-tight text-white hover:text-emerald-300 transition-colors"
         >
           DeltaChainLabs
         </Link>
@@ -22,7 +22,7 @@ export function Header() {
             href="/"
             className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
               pathname === "/"
-                ? "bg-cyan-500/20 text-cyan-300"
+                ? "bg-emerald-500/20 text-emerald-300"
                 : "text-slate-300 hover:bg-slate-800 hover:text-white"
             }`}
           >
@@ -32,7 +32,7 @@ export function Header() {
             href="/how-it-works"
             className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
               pathname === "/how-it-works"
-                ? "bg-cyan-500/20 text-cyan-300"
+                ? "bg-emerald-500/20 text-emerald-300"
                 : "text-slate-300 hover:bg-slate-800 hover:text-white"
             }`}
           >

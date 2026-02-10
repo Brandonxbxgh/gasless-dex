@@ -47,7 +47,7 @@ export default function HowItWorksPage() {
         </p>
 
         <section className="mb-10">
-          <h2 className="text-lg font-semibold text-cyan-300 mb-3">
+          <h2 className="text-lg font-semibold text-emerald-300 mb-3">
             Two types of swaps
           </h2>
           <div className="space-y-6 text-slate-300">
@@ -73,7 +73,7 @@ export default function HowItWorksPage() {
         </section>
 
         <section className="mb-10">
-          <h2 className="text-lg font-semibold text-cyan-300 mb-3">
+          <h2 className="text-lg font-semibold text-emerald-300 mb-3">
             What you send vs what you receive
           </h2>
           <ul className="space-y-2 text-slate-300 text-sm">
@@ -87,7 +87,7 @@ export default function HowItWorksPage() {
         </section>
 
         <section className="mb-10">
-          <h2 className="text-lg font-semibold text-cyan-300 mb-3">
+          <h2 className="text-lg font-semibold text-emerald-300 mb-3">
             Available pairs by chain
           </h2>
           <p className="text-slate-400 text-sm mb-4">
@@ -122,7 +122,7 @@ export default function HowItWorksPage() {
         </section>
 
         <section className="mb-10">
-          <h2 className="text-lg font-semibold text-cyan-300 mb-3">
+          <h2 className="text-lg font-semibold text-emerald-300 mb-3">
             Gasless vs requires gas (summary)
           </h2>
           <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 sm:p-5 text-sm text-slate-300 space-y-2">
@@ -155,7 +155,7 @@ export default function HowItWorksPage() {
         <p className="text-center">
           <Link
             href="/"
-            className="inline-flex items-center justify-center rounded-xl bg-cyan-500 hover:bg-cyan-400 px-5 py-2.5 text-sm font-medium text-white transition-colors"
+            className="inline-flex items-center justify-center rounded-xl bg-emerald-500 hover:bg-emerald-400 px-5 py-2.5 text-sm font-medium text-white transition-colors"
           >
             Back to Swap
           </Link>
