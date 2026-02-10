@@ -389,7 +389,7 @@ export function Swap() {
         return;
       }
       const tokenApprovalRequired = quote!.issues?.allowance != null;
-      const gaslessApprovalAvailable = quote.approval != null;
+      const gaslessApprovalAvailable = quote!.approval != null;
 
       let approvalDataToSubmit: ApprovalPayload | null = null;
 
