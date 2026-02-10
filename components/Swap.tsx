@@ -499,14 +499,14 @@ export function Swap() {
         <div key={address ?? "connected"}>
         <>
           <div className="rounded-lg bg-slate-800/60 border border-slate-600/40 px-3 py-2 mb-4 space-y-1">
-            <p className="text-xs text-slate-500">
-              Connected: <span className="text-slate-300 font-mono">{address ? truncateAddress(address) : ""}</span>
+            <p className="text-xs text-slate-300">
+              Connected: <span className="text-slate-200 font-mono">{address ? truncateAddress(address) : ""}</span>
             </p>
-            <p className="text-xs text-slate-500">
-              Receiving to: <span className="text-slate-300 font-mono">{receiveAddress ? truncateAddress(receiveAddress) : ""}</span>
+            <p className="text-xs text-slate-300">
+              Receiving to: <span className="text-slate-200 font-mono">{receiveAddress ? truncateAddress(receiveAddress) : ""}</span>
             </p>
             <div>
-              <label className="text-xs text-slate-500 block mb-1">Send to different address (optional)</label>
+              <label className="text-xs text-slate-300 block mb-1">Send to different address (optional)</label>
               <input
                 type="text"
                 placeholder="0x..."
@@ -526,7 +526,7 @@ export function Swap() {
           <div className="space-y-3">
             {/* From row: amount + token dropdown */}
             <div className="rounded-xl bg-slate-800/60 p-3 sm:p-4 border border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.08)]">
-              <label className="text-xs font-medium text-slate-400 block mb-2">From</label>
+              <label className="text-xs font-medium text-slate-300 block mb-2">From</label>
               {isSellingNative && (
                 <p className="text-xs text-amber-400/90 mb-1">Sending native {displaySellSymbol} (you pay gas for this swap)</p>
               )}
@@ -576,12 +576,12 @@ export function Swap() {
 
             {/* To row: amount + token dropdown */}
             <div className="rounded-xl bg-slate-800/60 p-3 sm:p-4 border border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.08)]">
-              <label className="text-xs font-medium text-slate-400 block mb-2">To</label>
+              <label className="text-xs font-medium text-slate-300 block mb-2">To</label>
               {isBuyingNative && (
                 <p className="text-xs text-emerald-400/90 mb-1">Receiving real native {NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH"}</p>
               )}
               {buyToken === WRAPPED_NATIVE[supportedChainId] && (
-                <p className="text-xs text-slate-400 mb-1">Receiving {tokens.find((t) => t.address === buyToken)?.symbol ?? "WETH"} (wrapped), not native</p>
+                <p className="text-xs text-slate-300 mb-1">Receiving {tokens.find((t) => t.address === buyToken)?.symbol ?? "WETH"} (wrapped), not native</p>
               )}
               <div className="flex gap-2 items-center">
                 <span className="flex-1 min-w-0 text-white text-lg font-medium truncate">
@@ -610,7 +610,7 @@ export function Swap() {
                 </select>
               </div>
               {(quote?.fees?.integratorFee || swapQuote?.fees?.integratorFee) && (
-                <p className="text-xs text-slate-400 mt-2">
+                <p className="text-xs text-slate-300 mt-2">
                   Fee (0.1%): {quote?.fees?.integratorFee
                     ? `${formatUnits(BigInt(quote.fees.integratorFee.amount), getTokenDecimals(sellSymbolForLogic, supportedChainId))} ${sellSymbol}`
                     : swapQuote?.fees?.integratorFee
@@ -663,11 +663,11 @@ export function Swap() {
                 <p className="text-center text-amber-300 font-medium py-2 text-sm">
                   {swapStatus === "signing" ? "Check your wallet — sign the request (it’s a signature, not a transaction)." : "Submitting..."}
                 </p>
-                <p className="text-center text-slate-400 text-xs">If nothing appeared: check your wallet app for the request, or disconnect and reconnect. If you already signed, check your wallet balance or tx history — the swap may have gone through; click Cancel to reset.</p>
+                <p className="text-center text-slate-300 text-xs">If nothing appeared: check your wallet app for the request, or disconnect and reconnect. If you already signed, check your wallet balance or tx history — the swap may have gone through; click Cancel to reset.</p>
                 <button
                   type="button"
                   onClick={resetSwap}
-                  className="w-full py-2 rounded-lg border border-slate-600 text-slate-400 hover:text-white text-sm"
+                  className="w-full py-2 rounded-lg border border-slate-600 text-slate-300 hover:text-white text-sm"
                 >
                   Cancel
                 </button>
@@ -718,10 +718,10 @@ export function Swap() {
             )}
           </div>
 
-          <p className="text-xs text-slate-500 mt-3 text-center">
+          <p className="text-xs text-slate-400 mt-3 text-center">
             EVM wallets only. Tokens you sell leave your connected wallet; tokens you receive are sent to the address above (or your wallet if no custom address).
           </p>
-          <p className="text-sm text-slate-400 mt-2 text-center">
+          <p className="text-sm text-slate-300 mt-2 text-center">
             Gasless by DeltaChainLabs · Powered by 0x
           </p>
         </>

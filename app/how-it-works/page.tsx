@@ -42,7 +42,7 @@ export default function HowItWorksPage() {
         <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
           How it works
         </h1>
-        <p className="text-slate-400 mb-8">
+        <p className="text-slate-200 mb-8">
           Swaps, available pairs, and when you pay gas vs when you don’t.
         </p>
 
@@ -50,22 +50,22 @@ export default function HowItWorksPage() {
           <h2 className="text-lg font-semibold text-emerald-300 mb-3">
             Two types of swaps
           </h2>
-          <div className="space-y-6 text-slate-300">
+          <div className="space-y-6 text-slate-200">
             <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 sm:p-5">
               <h3 className="font-medium text-white mb-2">Gasless (no gas)</h3>
-              <p className="text-sm leading-relaxed mb-2">
+              <p className="text-sm leading-relaxed mb-2 text-slate-200">
                 When you <strong>sell a token</strong> (e.g. USDC, USDT, WETH, WBNB, WMATIC), you only sign a message. We submit the transaction and pay gas. You receive the buy token in your wallet with no extra step.
               </p>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-300">
                 Pairs: stable ↔ wrapped native, or stable ↔ stable on the same chain. You can also choose to receive <strong>real native</strong> (ETH, BNB, MATIC) via the “To” dropdown — select “ETH (native)” (or BNB/MATIC native) to get chain currency in your wallet.
               </p>
             </div>
             <div className="rounded-xl bg-slate-800/60 border border-amber-500/20 p-4 sm:p-5">
               <h3 className="font-medium text-white mb-2">Requires gas (you pay)</h3>
-              <p className="text-sm leading-relaxed mb-2">
+              <p className="text-sm leading-relaxed mb-2 text-slate-200">
                 When you <strong>sell native</strong> ETH, BNB, or MATIC, you send one transaction from your wallet. You pay gas for that transaction. This is the only way to swap native chain currency on our app.
               </p>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-300">
                 Pairs: native ETH/BNB/MATIC → USDC, USDT, or wrapped. Fee is taken in the token you’re <strong>receiving</strong> (e.g. USDT when you sell BNB).
               </p>
             </div>
@@ -76,7 +76,7 @@ export default function HowItWorksPage() {
           <h2 className="text-lg font-semibold text-emerald-300 mb-3">
             What you send vs what you receive
           </h2>
-          <ul className="space-y-2 text-slate-300 text-sm">
+          <ul className="space-y-2 text-slate-200 text-sm">
             <li>
               <strong className="text-white">Sending (From):</strong> If you choose ETH, BNB, or MATIC in the dropdown, you’re sending <strong>native</strong> chain currency (one tx, you pay gas). If you choose USDC, USDT, WETH, etc., you’re sending that token (gasless when applicable).
             </li>
@@ -90,7 +90,7 @@ export default function HowItWorksPage() {
           <h2 className="text-lg font-semibold text-emerald-300 mb-3">
             Available pairs by chain
           </h2>
-          <p className="text-slate-400 text-sm mb-4">
+          <p className="text-slate-200 text-sm mb-4">
             Same-chain swaps only. Supported tokens per network:
           </p>
           <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 overflow-hidden">
@@ -101,7 +101,7 @@ export default function HowItWorksPage() {
                   <th className="text-left py-3 px-4 font-medium text-white">Tokens</th>
                 </tr>
               </thead>
-              <tbody className="text-slate-300">
+              <tbody className="text-slate-200">
                 {CHAINS.map((chain) => (
                   <tr
                     key={chain.id}
@@ -116,7 +116,7 @@ export default function HowItWorksPage() {
               </tbody>
             </table>
           </div>
-          <p className="text-xs text-slate-500 mt-3">
+          <p className="text-xs text-slate-400 mt-3">
             Any pair between these tokens on the same chain is supported. BNB has no USDC (USDT + WBNB only).
           </p>
         </section>
@@ -125,7 +125,7 @@ export default function HowItWorksPage() {
           <h2 className="text-lg font-semibold text-emerald-300 mb-3">
             Gasless vs requires gas (summary)
           </h2>
-          <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 sm:p-5 text-sm text-slate-300 space-y-2">
+          <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 sm:p-5 text-sm text-slate-200 space-y-2">
             <p>
               <strong className="text-white">Gasless:</strong> Sell USDC, USDT, WETH, WBNB, or WMATIC → you sign, we pay gas. You receive the buy token (stables or wrapped).
             </p>
@@ -136,17 +136,17 @@ export default function HowItWorksPage() {
         </section>
 
         <section className="mb-10 rounded-xl bg-slate-800/40 border border-slate-700/30 p-4 sm:p-5">
-          <h2 className="text-lg font-semibold text-indigo-300 mb-2">
+          <h2 className="text-lg font-semibold text-emerald-300 mb-2">
             Need help?
           </h2>
-          <p className="text-sm text-slate-400 mb-2">
+          <p className="text-sm text-slate-200 mb-2">
             Questions or issues? Reach out on Telegram.
           </p>
           <a
             href="https://t.me/brandonxbxgh"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-indigo-400 hover:text-indigo-300 font-medium text-sm"
+            className="text-emerald-400 hover:text-emerald-300 font-medium text-sm"
           >
             t.me/brandonxbxgh →
           </a>
