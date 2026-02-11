@@ -58,7 +58,7 @@ function getPreferredFeeToken(
   return buyToken !== NATIVE_TOKEN_ADDRESS ? buyToken : sellToken;
 }
 
-/** 0x Allowance Holder (same on BNB, Ethereum, Base, etc.) – used when 0x doesn't return issues.allowance */
+/** 0x Allowance Holder (same on BNB, Ethereum, Base, etc.) ? used when 0x doesn't return issues.allowance */
 const ALLOWANCE_HOLDER = "0x0000000000001fF3684f28c67538d4D072C22734" as const;
 
 function truncateAddress(addr: string) {
@@ -168,6 +168,7 @@ export function Swap() {
   const [tradeHash, setTradeHash] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [customRecipient, setCustomRecipient] = useState("");
+  const [showCustomRecipient, setShowCustomRecipient] = useState(false);
   const [receiveUsd, setReceiveUsd] = useState<number | null>(null);
   const [needsManualApproval, setNeedsManualApproval] = useState(false);
   const [approvingInProgress, setApprovingInProgress] = useState(false);
@@ -342,7 +343,7 @@ export function Swap() {
         const onBnb = supportedChainId === 56;
         setQuoteError(
           onBnb
-            ? "On BNB Smart Chain the protocol requires a higher minimum for gasless swaps (try $50–100+ USDT), or use Ethereum/Base/Arbitrum for smaller amounts."
+            ? "On BNB Smart Chain the protocol requires a higher minimum for gasless swaps (try $50?100+ USDT), or use Ethereum/Base/Arbitrum for smaller amounts."
             : "The protocol requires a larger minimum for this pair on this network. Try a higher amount, or use Ethereum/Base/Arbitrum where smaller trades may be supported."
         );
       } else if (lower.includes("insufficient balance") && isSellingNative) {
@@ -465,7 +466,7 @@ export function Swap() {
     } catch (e) {
       let msg = e instanceof Error ? e.message : "Approval or swap failed";
       if (/rejected|declined/i.test(msg)) {
-        msg += " Receiving real native requires one tx (you pay gas). For a fully gasless swap, use the Gasless tab and choose WETH/WBNB/WMATIC in “To”, not native.";
+        msg += " Receiving real native requires one tx (you pay gas). For a fully gasless swap, use the Gasless tab and choose WETH/WBNB/WMATIC in ?To?, not native.";
       }
       setSwapError(msg);
       setSwapStatus("error");
@@ -520,7 +521,7 @@ export function Swap() {
       } else if (tokenApprovalRequired && !gaslessApprovalAvailable) {
         setNeedsManualApproval(true);
         setSwapError(
-          "This token needs a one-time approval (you’ll pay gas once). Click “Approve” below, then sign in your wallet. Without enough allowance, the swap fails with “transfer amount exceeds allowance”."
+          "This token needs a one-time approval (you pay gas once). Click Approve below, then sign in your wallet. Without enough allowance, the swap fails."
         );
         setSwapStatus("error");
         return;
@@ -530,7 +531,7 @@ export function Swap() {
     } catch (e) {
       let msg = e instanceof Error ? e.message : "Swap failed";
       if (/rejected|declined/i.test(msg)) {
-        msg += " Receiving real native (ETH/BNB/MATIC) requires one approval transaction (you pay gas). For a fully gasless swap, choose WETH, WBNB, or WMATIC in “To” instead of native.";
+        msg += " Receiving real native (ETH/BNB/MATIC) requires one approval transaction (you pay gas). For a fully gasless swap, choose WETH, WBNB, or WMATIC in To instead of native.";
       }
       setSwapError(msg);
       setSwapStatus("error");
@@ -555,198 +556,174 @@ export function Swap() {
     setSwapQuote(null);
   }, [sellToken, buyToken, supportedChainId]);
 
+  const chainColor = { 8453: "var(--chain-base)", 42161: "var(--chain-arbitrum)", 137: "var(--chain-polygon)", 56: "var(--chain-bsc)", 1: "var(--chain-mainnet)" }[supportedChainId] ?? "var(--swap-green)";
+
   return (
-    <div className="w-full max-w-md mx-auto rounded-2xl border-2 p-4 sm:p-6 bg-[var(--delta-card)] shadow-[0_0_32px_var(--swap-green-glow)] border-[var(--swap-pill-border)]">
-      <h1 className="text-xl sm:text-2xl font-bold text-center mb-1 text-[var(--swap-green-bright)]">
+    <div className="w-full max-w-md mx-auto rounded-2xl border p-5 sm:p-6 bg-[var(--delta-card)] shadow-[0_0_24px_var(--swap-green-glow)] border-[var(--swap-pill-border)]">
+      <h1 className="text-lg sm:text-xl font-bold text-center mb-0.5 text-[var(--swap-green-bright)]">
         DeltaChainLabs
       </h1>
       <p className="text-center text-slate-400 text-sm mb-4">Swap</p>
 
       {!isConnected ? (
-        <div className="py-8 flex flex-col items-center gap-4">
-          <p className="text-[var(--delta-text-muted)] text-base font-medium">Connect your wallet to swap</p>
+        <div className="py-10 flex flex-col items-center gap-4">
+          <p className="text-[var(--delta-text-muted)] text-sm font-medium">Connect your wallet to swap</p>
           <ConnectButton />
         </div>
       ) : (
         <div key={address ?? "connected"}>
         <>
-          <div className="rounded-2xl bg-[var(--swap-pill-bg)] border border-slate-600/80 px-4 py-3 mb-4 space-y-1">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <p className="text-xs text-slate-200">
-                Connected: <span className="text-white font-mono">{address ? truncateAddress(address) : ""}</span>
-              </p>
+          {/* Compact wallet row */}
+          <div className="flex items-center justify-between gap-2 mb-4 py-2 px-3 rounded-xl bg-[var(--swap-pill-bg)] border border-slate-700/50">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" aria-hidden />
+              <span className="text-xs text-slate-300 truncate font-mono">{address ? truncateAddress(address) : ""}</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowCustomRecipient(!showCustomRecipient)}
+                className="text-xs text-slate-400 hover:text-slate-200"
+              >
+                {showCustomRecipient ? "Hide" : "Custom"}
+              </button>
               <button
                 type="button"
                 onClick={() => disconnect()}
-                className="text-xs text-slate-400 hover:text-white underline"
+                className="text-xs text-slate-400 hover:text-white"
               >
                 Disconnect
               </button>
             </div>
-            <p className="text-xs text-slate-200">
-              Receiving to: <span className="text-white font-mono">{receiveAddress ? truncateAddress(receiveAddress) : ""}</span>
-            </p>
-            <div>
-              <label className="text-xs text-slate-200 block mb-1">Send to different address (optional)</label>
+          </div>
+          {showCustomRecipient && (
+            <div className="mb-4">
               <input
                 type="text"
-                placeholder="0x..."
+                placeholder="Send to different address (0x...)"
                 value={customRecipient}
-                onChange={(e) => {
-                  setCustomRecipient(e.target.value);
-                  setQuote(null);
-                }}
-                className="w-full bg-slate-800/80 text-white text-sm rounded-full px-4 py-2 border border-slate-600 placeholder:text-slate-500 focus:ring-2 focus:ring-[var(--swap-green)] focus:border-[var(--swap-pill-border)]"
+                onChange={(e) => { setCustomRecipient(e.target.value); setQuote(null); }}
+                className="w-full bg-slate-800/60 text-white text-sm rounded-lg px-3 py-2 border border-slate-600 placeholder:text-slate-500 focus:ring-1 focus:ring-[var(--swap-green)] text-xs"
               />
               {customRecipient.trim() && !isAddress(customRecipient.trim()) && (
                 <p className="text-xs text-amber-400 mt-1">Enter a valid EVM address</p>
               )}
             </div>
-          </div>
+          )}
 
-          <div className="space-y-3">
-            {/* From row: [Network pill] [Token + amount pill] */}
+          <div className="space-y-2">
+            {/* From: [Network] [Token | Amount] - token left, amount right */}
             <div>
-              <label className="text-xs font-medium text-slate-400 block mb-1.5 ml-1">From</label>
+              <label className="text-xs font-medium text-slate-500 block mb-1">From</label>
               {isSellingNative && (
-                <p className="text-xs text-amber-400/90 mb-1 ml-1">Sending native {displaySellSymbol} (you pay gas for this swap)</p>
+                <p className="text-xs text-amber-400/90 mb-1">Sending native {displaySellSymbol} (you pay gas)</p>
               )}
               <div className="flex items-stretch gap-2">
                 <select
                   value={supportedChainId}
                   onChange={(e) => switchChain?.({ chainId: Number(e.target.value) as SupportedChainId })}
-                  className="rounded-full bg-[var(--swap-green)] text-white text-sm font-medium px-4 py-3 border-0 cursor-pointer focus:ring-2 focus:ring-[var(--swap-green-bright)] appearance-none bg-no-repeat bg-right pr-10 min-w-[7rem]"
-                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
+                  className="rounded-xl text-white text-sm font-medium px-3 py-2.5 border-0 cursor-pointer focus:ring-2 focus:ring-[var(--swap-green)] appearance-none bg-no-repeat bg-right pr-8 min-w-[5.5rem] shrink-0"
+                  style={{ backgroundColor: chainColor, backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
                   aria-label="Select network"
                 >
                   {supportedChains.map((ch) => (
                     <option key={ch.id} value={ch.id}>{ch.name}</option>
                   ))}
                 </select>
-                <div className="flex-1 flex flex-col rounded-full bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] overflow-hidden min-h-[3.25rem]">
-                  <div className="flex items-center gap-2 px-4 py-2 flex-1">
-                    <div className="flex-1 flex flex-col min-w-0">
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => { setAmountMode("token"); setQuote(null); }}
-                          className={`text-xs font-medium ${amountMode === "token" ? "text-[var(--swap-green-bright)]" : "text-slate-500 hover:text-slate-300"}`}
-                        >
-                          Token
-                        </button>
-                        <span className="text-slate-600">|</span>
-                        <button
-                          type="button"
-                          onClick={() => { setAmountMode("usd"); setQuote(null); }}
-                          className={`text-xs font-medium ${amountMode === "usd" ? "text-[var(--swap-green-bright)]" : "text-slate-500 hover:text-slate-300"}`}
-                        >
-                          $
-                        </button>
-                      </div>
-                      {amountMode === "token" ? (
+                <div className="flex-1 flex items-center gap-3 rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] px-4 py-2.5 min-h-[2.75rem]">
+                  <select
+                    value={sellToken}
+                    onChange={(e) => { setSellToken(e.target.value as `0x${string}`); setQuote(null); }}
+                    className="bg-transparent text-[var(--swap-green-bright)] font-medium text-sm min-w-[4.5rem] cursor-pointer focus:ring-0 border-0 py-0 pr-5 appearance-none bg-no-repeat bg-right flex items-center gap-1.5"
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234ade80'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
+                    aria-label="Select token to sell"
+                  >
+                    {tokens.map((t) => (
+                      <option key={t.address} value={t.address}>
+                        {t.address === WRAPPED_NATIVE[supportedChainId] ? (NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH") : t.symbol}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex-1 flex flex-col items-end min-w-0">
+                    <div className="flex items-center gap-1 w-full justify-end">
+                      <button
+                        type="button"
+                        onClick={() => { setAmountMode("token"); setQuote(null); }}
+                        className={`text-xs ${amountMode === "token" ? "text-[var(--swap-green-bright)]" : "text-slate-500 hover:text-slate-400"}`}
+                      >
+                        Token
+                      </button>
+                      <span className="text-slate-600">|</span>
+                      <button
+                        type="button"
+                        onClick={() => { setAmountMode("usd"); setQuote(null); }}
+                        className={`text-xs ${amountMode === "usd" ? "text-[var(--swap-green-bright)]" : "text-slate-500 hover:text-slate-400"}`}
+                      >
+                        $
+                      </button>
+                    </div>
+                    {amountMode === "token" ? (
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0.0"
+                        value={sellAmount}
+                        onChange={(e) => { const v = e.target.value.replace(/[^0-9.]/g, ""); setSellAmount(v); setQuote(null); }}
+                        className="w-full bg-transparent text-white text-base font-medium outline-none placeholder:text-slate-500 text-right"
+                      />
+                    ) : (
+                      <div className="flex items-baseline gap-0.5 justify-end w-full">
+                        <span className="text-slate-400 text-sm">$</span>
                         <input
                           type="text"
                           inputMode="decimal"
-                          placeholder="0.0"
-                          value={sellAmount}
-                          onChange={(e) => {
-                            const v = e.target.value.replace(/[^0-9.]/g, "");
-                            setSellAmount(v);
-                            setQuote(null);
-                          }}
-                          className="w-full bg-transparent text-white text-lg font-medium outline-none placeholder:text-slate-500 focus:ring-0"
+                          placeholder="0.00"
+                          value={usdInput}
+                          onChange={(e) => { const v = e.target.value.replace(/[^0-9.]/g, ""); setUsdInput(v); setQuote(null); }}
+                          className="w-full min-w-0 bg-transparent text-white text-base font-medium outline-none placeholder:text-slate-500 text-right"
                         />
-                      ) : (
-                        <div className="flex items-baseline gap-1">
-                          <span className="text-slate-400 text-lg font-medium">$</span>
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            placeholder="0.00"
-                            value={usdInput}
-                            onChange={(e) => {
-                              const v = e.target.value.replace(/[^0-9.]/g, "");
-                              setUsdInput(v);
-                              setQuote(null);
-                            }}
-                            className="w-full min-w-0 bg-transparent text-white text-lg font-medium outline-none placeholder:text-slate-500 focus:ring-0"
-                          />
-                        </div>
-                      )}
-                    </div>
-                    <select
-                      value={sellToken}
-                      onChange={(e) => {
-                        setSellToken(e.target.value as `0x${string}`);
-                        setQuote(null);
-                      }}
-                      className="bg-transparent text-[var(--swap-green-bright)] font-medium text-sm min-w-[5rem] sm:min-w-[6rem] cursor-pointer focus:ring-0 border-0 py-1 pr-6 appearance-none bg-no-repeat bg-right"
-                      style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234ade80'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
-                      aria-label="Select token to sell"
-                    >
-                      {tokens.map((t) => (
-                        <option key={t.address} value={t.address}>
-                          {t.address === WRAPPED_NATIVE[supportedChainId] ? (NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH") : t.symbol}
-                        </option>
-                      ))}
-                    </select>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Flip button */}
+            {/* Simple downward arrow */}
             <div className="flex justify-center -my-0.5">
               <button
                 type="button"
                 onClick={flipTokens}
-                className="p-2.5 rounded-full bg-[var(--swap-green)] text-white hover:bg-[var(--swap-green-bright)] shadow-[0_0_12px_var(--swap-green-glow)] transition"
+                className="p-2 rounded-lg bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] text-[var(--swap-green-bright)] hover:bg-[var(--swap-green)] hover:text-white hover:border-[var(--swap-green)] transition"
                 aria-label="Swap from and to"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
                 </svg>
               </button>
             </div>
 
-            {/* To row: [Network pill] [Token + amount pill] */}
+            {/* To: [Network] [Token | Amount] */}
             <div>
-              <label className="text-xs font-medium text-slate-400 block mb-1.5 ml-1">To</label>
+              <label className="text-xs font-medium text-slate-500 block mb-1">To</label>
               {isBuyingNative && (
-                <p className="text-xs text-[var(--swap-green-bright)] mb-1 ml-1">Receiving real native {NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH"}</p>
+                <p className="text-xs text-[var(--swap-green-bright)] mb-1">Receiving native {NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH"}</p>
               )}
               {buyToken === WRAPPED_NATIVE[supportedChainId] && (
-                <p className="text-xs text-slate-300 mb-1 ml-1">Receiving {tokens.find((t) => t.address === buyToken)?.symbol ?? "WETH"} (wrapped), not native</p>
+                <p className="text-xs text-slate-400 mb-1">Receiving wrapped, not native</p>
               )}
               <div className="flex items-stretch gap-2">
-                <select
-                  value={supportedChainId}
-                  onChange={(e) => switchChain?.({ chainId: Number(e.target.value) as SupportedChainId })}
-                  className="rounded-full bg-[var(--swap-pill-bg)] text-slate-200 border border-[var(--swap-pill-border)] text-sm font-medium px-4 py-3 cursor-pointer focus:ring-2 focus:ring-[var(--swap-green)] appearance-none bg-no-repeat bg-right pr-10 min-w-[7rem]"
-                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234ade80'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
-                  aria-label="Select network (same chain)"
+                <div
+                  className="rounded-xl bg-[var(--swap-pill-bg)] border border-slate-700/50 text-slate-400 text-sm font-medium px-3 py-2.5 min-w-[5.5rem] shrink-0 flex items-center justify-center"
+                  style={{ backgroundColor: "rgba(26,31,46,0.6)" }}
                 >
-                  {supportedChains.map((ch) => (
-                    <option key={ch.id} value={ch.id}>{ch.name}</option>
-                  ))}
-                </select>
-                <div className="flex-1 flex items-center gap-2 rounded-full bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] px-4 py-3 min-h-[3.25rem]">
-                  <span className="flex-1 min-w-0 text-[var(--swap-green-bright)] text-lg font-medium truncate">
-                    {(quote || swapQuote)
-                      ? formatUnits(
-                          BigInt((quote ?? swapQuote)!.buyAmount),
-                          isBuyingNative ? 18 : getTokenDecimals(tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH", supportedChainId)
-                        )
-                      : "0.0"}
-                  </span>
+                  {supportedChains.find((c) => c.id === supportedChainId)?.name ?? "Base"}
+                </div>
+                <div className="flex-1 flex items-center gap-3 rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] px-4 py-2.5 min-h-[2.75rem]">
                   <select
                     value={buyToken}
-                    onChange={(e) => {
-                      setBuyToken(e.target.value as `0x${string}`);
-                      setQuote(null);
-                      setSwapQuote(null);
-                    }}
-                    className="bg-transparent text-[var(--swap-green-bright)] font-medium text-sm min-w-[5rem] sm:min-w-[6rem] cursor-pointer focus:ring-0 border-0 py-1 pr-6 appearance-none bg-no-repeat bg-right"
+                    onChange={(e) => { setBuyToken(e.target.value as `0x${string}`); setQuote(null); setSwapQuote(null); }}
+                    className="bg-transparent text-[var(--swap-green-bright)] font-medium text-sm min-w-[4.5rem] cursor-pointer focus:ring-0 border-0 py-0 pr-5 appearance-none bg-no-repeat bg-right"
                     style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234ade80'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
                     aria-label="Select token to receive"
                   >
@@ -756,10 +733,18 @@ export function Swap() {
                       </option>
                     ))}
                   </select>
+                  <span className="flex-1 min-w-0 text-[var(--swap-green-bright)] text-base font-medium truncate text-right">
+                    {(quote || swapQuote)
+                      ? formatUnits(
+                          BigInt((quote ?? swapQuote)!.buyAmount),
+                          isBuyingNative ? 18 : getTokenDecimals(tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH", supportedChainId)
+                        )
+                      : "0.0"}
+                  </span>
                 </div>
               </div>
               {(quote?.fees?.integratorFee || swapQuote?.fees?.integratorFee) && (
-                <p className="text-xs text-slate-200 mt-2 ml-1">
+                <p className="text-xs text-slate-400 mt-1.5">
                   Fee (0.1%): {quote?.fees?.integratorFee
                     ? (() => {
                         const feeTokenAddr = quote.fees.integratorFee.token;
@@ -778,53 +763,53 @@ export function Swap() {
                 </p>
               )}
               {receiveUsd != null && receiveUsd > 0 && (
-                <p className="text-sm text-[var(--swap-green-bright)] font-medium mt-2 ml-1">
-                  ≈ ${receiveUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+                <p className="text-xs text-[var(--swap-green-bright)] font-medium mt-1.5">
+                  ? ${receiveUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
                 </p>
               )}
             </div>
           </div>
 
           {quoteError && (
-            <p className="text-red-400 text-sm font-medium mt-2 bg-red-500/10 rounded-lg px-3 py-2 border border-red-500/20">{quoteError}</p>
+            <p className="text-red-400 text-xs font-medium mt-3 bg-red-500/10 rounded-lg px-3 py-2 border border-red-500/20">{quoteError}</p>
           )}
 
-          <div className="mt-5 flex flex-col gap-3">
+          <div className="mt-4 flex flex-col gap-2.5">
             {swapStatus === "idle" && (
               <>
                 {isBelowMin && (
-                  <p className="text-amber-400 text-sm">Minimum sell amount: {minSellAmount} {sellSymbol}</p>
+                  <p className="text-amber-400 text-xs">Min: {minSellAmount} {sellSymbol}</p>
                 )}
                 <button
                   onClick={fetchQuote}
                   disabled={!(amountMode === "usd" ? usdInput : sellAmount) || amountNum <= 0 || quoteLoading || isBelowMin || (amountMode === "usd" && !sellTokenPriceUsd)}
-                  className="w-full py-3.5 rounded-full bg-[var(--swap-green)] hover:bg-[var(--swap-green-bright)] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold uppercase tracking-wide transition shadow-[0_0_20px_var(--swap-green-glow)]"
+                  className="w-full py-3 rounded-xl bg-[var(--swap-green)] hover:bg-[var(--swap-green-bright)] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold uppercase tracking-wide text-sm transition"
                 >
                   {quoteLoading ? "Getting quote..." : "Get Quote"}
                 </button>
                 {quote && !isSellingNative && !quote.approval && (
                   <div className="space-y-1">
-                    <p className="text-amber-300 text-xs font-medium">Step 1: Approve {sellSymbol} (pay gas once). Required or you’ll get “transfer amount exceeds allowance”.</p>
+                    <p className="text-amber-300 text-xs">Step 1: Approve {sellSymbol} (pay gas once)</p>
                     <button
                       type="button"
                       onClick={doApprove}
                       disabled={approvingInProgress}
-                      className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-semibold"
+                      className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-semibold text-sm"
                     >
-                      {approvingInProgress ? "Check your wallet…" : `Approve ${sellSymbol}`}
+                      {approvingInProgress ? "Check wallet?" : `Approve ${sellSymbol}`}
                     </button>
                   </div>
                 )}
                 {swapQuote && !isSellingNative && (
                   <div className="space-y-1">
-                    <p className="text-amber-300 text-xs font-medium">Step 1: Approve {sellSymbol} (pay gas once). Required when receiving real native — or you’ll get “transfer amount exceeds allowance”.</p>
+                    <p className="text-amber-300 text-xs">Step 1: Approve {sellSymbol} (pay gas once)</p>
                     <button
                       type="button"
                       onClick={doApproveForSwapQuote}
                       disabled={approvingInProgress}
-                      className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-semibold"
+                      className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-semibold text-sm"
                     >
-                      {approvingInProgress ? "Check your wallet…" : `Approve & Swap (receive ${NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH"})`}
+                      {approvingInProgress ? "Check wallet?" : "Approve & Swap"}
                     </button>
                   </div>
                 )}
@@ -836,7 +821,7 @@ export function Swap() {
                     {!(swapQuote && !isSellingNative) && (
                       <button
                         onClick={executeSwap}
-                        className="w-full py-3.5 rounded-full bg-[var(--swap-green)] hover:bg-[var(--swap-green-bright)] text-white font-semibold uppercase tracking-wide transition shadow-[0_0_20px_var(--swap-green-glow)]"
+                        className="w-full py-3 rounded-xl bg-[var(--swap-green)] hover:bg-[var(--swap-green-bright)] text-white font-semibold uppercase tracking-wide text-sm transition"
                       >
                         {swapQuote ? "Sign & Swap (you pay gas)" : "Sign & Swap (No Gas!)"}
                       </button>
@@ -848,9 +833,9 @@ export function Swap() {
             {(swapStatus === "signing" || swapStatus === "submitting") && (
               <div className="space-y-2">
                 <p className="text-center text-amber-300 font-medium py-2 text-sm">
-                  {swapStatus === "signing" ? "Check your wallet — sign the request (it’s a signature, not a transaction)." : "Submitting..."}
+                  {swapStatus === "signing" ? "Check your wallet ? sign the request (it?s a signature, not a transaction)." : "Submitting..."}
                 </p>
-                <p className="text-center text-slate-300 text-xs">If nothing appeared: check your wallet app for the request, or disconnect and reconnect. If you already signed, check your wallet balance or tx history — the swap may have gone through; click Cancel to reset.</p>
+                <p className="text-center text-slate-300 text-xs">If nothing appeared: check your wallet app for the request, or disconnect and reconnect. If you already signed, check your wallet balance or tx history ? the swap may have gone through; click Cancel to reset.</p>
                 <button
                   type="button"
                   onClick={resetSwap}
@@ -891,7 +876,7 @@ export function Swap() {
                       disabled={approvingInProgress}
                       className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-semibold"
                     >
-                      {approvingInProgress ? "Check your wallet…" : `Approve ${sellSymbol} (pay gas once)`}
+                      {approvingInProgress ? "Check wallet?" : `Approve ${sellSymbol} (pay gas once)`}
                     </button>
                   )}
                   {swapQuote && !isSellingNative && (
@@ -900,7 +885,7 @@ export function Swap() {
                       disabled={approvingInProgress}
                       className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-semibold"
                     >
-                      {approvingInProgress ? "Check your wallet…" : `Approve ${sellSymbol} & Swap`}
+                      {approvingInProgress ? "Check wallet?" : `Approve ${sellSymbol} & Swap`}
                     </button>
                   )}
                   <button
@@ -914,11 +899,11 @@ export function Swap() {
             )}
           </div>
 
-          <p className="text-xs text-slate-400 mt-3 text-center">
-            EVM wallets only. Tokens you sell leave your connected wallet; tokens you receive are sent to the address above (or your wallet if no custom address). If a swap fails with “transfer amount exceeds allowance”, approve the sell token first (Approve button when shown) then try again.
+          <p className="text-xs text-slate-500 mt-4 text-center max-w-xs mx-auto">
+            EVM wallets only. Approve first if prompted. Tokens sent to address above.
           </p>
-          <p className="text-sm text-slate-300 mt-2 text-center">
-            Gasless by DeltaChainLabs · Powered by 0x
+          <p className="text-xs text-slate-500 mt-1 text-center">
+            Gasless by DeltaChainLabs ? Powered by 0x
           </p>
         </>
         </div>
