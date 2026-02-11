@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useCallback, useMemo, useEffect } from "react";
-import { useAccount, useChainId, useSwitchChain, useWalletClient, useDisconnect } from "wagmi";
-import { parseUnits, formatUnits, isAddress, maxUint256 } from "viem";
+import { useAccount, useChainId, useSwitchChain, useWalletClient, usePublicClient, useDisconnect } from "wagmi";
+import { parseUnits, formatUnits, isAddress, maxUint256, waitForTransactionReceipt } from "viem";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import {
   getGaslessQuote,
@@ -58,7 +58,7 @@ function getPreferredFeeToken(
   return buyToken !== NATIVE_TOKEN_ADDRESS ? buyToken : sellToken;
 }
 
-/** 0x Allowance Holder (same on BNB, Ethereum, Base, etc.) ? used when 0x doesn't return issues.allowance */
+/** 0x Allowance Holder (same on BNB, Ethereum, Base, etc.) - used when 0x doesn't return issues.allowance */
 const ALLOWANCE_HOLDER = "0x0000000000001fF3684f28c67538d4D072C22734" as const;
 
 function truncateAddress(addr: string) {
@@ -132,6 +132,7 @@ export function Swap() {
     ? (chainId as SupportedChainId)
     : 8453;
   const { data: walletClient } = useWalletClient();
+  const publicClient = usePublicClient();
   const { disconnect } = useDisconnect();
 
   const [sellToken, setSellToken] = useState<`0x${string}`>(
@@ -234,9 +235,28 @@ export function Swap() {
   const isBelowMin = amountNum > 0 && amountNum < minSellAmount;
 
   const fetchQuote = useCallback(async () => {
-    const amountToUse = amountMode === "usd" && usdInput
-      ? (sellTokenPriceUsd && sellTokenPriceUsd > 0 ? parseFloat(usdInput) / sellTokenPriceUsd : 0)
-      : parseFloat(sellAmount);
+    let amountToUse: number;
+    if (amountMode === "usd" && usdInput) {
+      let price = sellTokenPriceUsd;
+      if (!price || price <= 0) {
+        try {
+          const addr = isSellingNative ? WRAPPED_NATIVE[supportedChainId] : sellToken;
+          const r = await fetch(`/api/token-price?chainId=${supportedChainId}&address=${encodeURIComponent(addr!)}`);
+          const d = (await r.json()) as { usd?: number | null };
+          price = typeof d?.usd === "number" ? d.usd : 0;
+          if (price > 0) setSellTokenPriceUsd(price);
+        } catch {
+          price = 0;
+        }
+        if (!price || price <= 0) {
+          setQuoteError("Unable to get token price for USD conversion. Try token amount mode.");
+          return;
+        }
+      }
+      amountToUse = parseFloat(usdInput) / price;
+    } else {
+      amountToUse = parseFloat(sellAmount);
+    }
     if (!address || !(amountMode === "usd" ? usdInput : sellAmount) || amountToUse <= 0) return;
     const sellSymbolForLogic = tokens.find((t) => t.address === sellToken)?.symbol ?? "USDC";
     const minAmount = MIN_SELL_AMOUNT[sellSymbolForLogic] ?? 1;
@@ -246,10 +266,6 @@ export function Swap() {
       setQuoteError(`Minimum sell amount is ${minAmount} ${displaySym}. Try at least ${minAmount} ${displaySym} or check your wallet balance.`);
       setQuote(null);
       setSwapQuote(null);
-      return;
-    }
-    if (amountMode === "usd" && (!sellTokenPriceUsd || sellTokenPriceUsd <= 0)) {
-      setQuoteError("Unable to get token price for USD conversion. Try token amount mode.");
       return;
     }
     setQuoteError(null);
@@ -462,6 +478,15 @@ export function Swap() {
         value: BigInt(tx.value),
       });
       setTxHash(hash);
+      if (publicClient) {
+        const receipt = await waitForTransactionReceipt(publicClient, { hash });
+        if (receipt.status === "reverted") {
+          setSwapError("Transaction failed on chain. Try again or use WETH instead of native ETH for gasless swaps.");
+          setSwapStatus("error");
+          setApprovingInProgress(false);
+          return;
+        }
+      }
       setSwapStatus("success");
     } catch (e) {
       let msg = e instanceof Error ? e.message : "Approval or swap failed";
@@ -473,7 +498,7 @@ export function Swap() {
     } finally {
       setApprovingInProgress(false);
     }
-  }, [swapQuote, walletClient, address, sellToken]);
+  }, [swapQuote, walletClient, publicClient, address, sellToken]);
 
   const executeSwap = useCallback(async () => {
     if ((!quote && !swapQuote) || !address || !walletClient) return;
@@ -490,6 +515,14 @@ export function Swap() {
           value: BigInt(tx.value),
         });
         setTxHash(hash);
+        if (publicClient) {
+          const receipt = await waitForTransactionReceipt(publicClient, { hash });
+          if (receipt.status === "reverted") {
+            setSwapError("Transaction failed on chain. Try again or use WETH instead of native ETH for gasless swaps.");
+            setSwapStatus("error");
+            return;
+          }
+        }
         setSwapStatus("success");
         return;
       }
@@ -535,7 +568,7 @@ export function Swap() {
       setSwapError(msg);
       setSwapStatus("error");
     }
-  }, [quote, swapQuote, address, walletClient, signAndSubmitTrade]);
+  }, [quote, swapQuote, address, walletClient, publicClient, signAndSubmitTrade]);
 
   const resetSwap = useCallback(() => {
     setSwapStatus("idle");
@@ -772,7 +805,7 @@ export function Swap() {
                 )}
                 <button
                   onClick={fetchQuote}
-                  disabled={!(amountMode === "usd" ? usdInput : sellAmount) || amountNum <= 0 || quoteLoading || isBelowMin || (amountMode === "usd" && !sellTokenPriceUsd)}
+                  disabled={!(amountMode === "usd" ? usdInput : sellAmount) || (amountMode === "usd" ? parseFloat(usdInput || "0") <= 0 : amountNum <= 0) || quoteLoading || isBelowMin}
                   className="w-full py-4 rounded-2xl bg-[#2d2d3d] hover:bg-[#3d3d4d] disabled:opacity-50 disabled:cursor-not-allowed text-[var(--swap-accent)] font-semibold text-base transition mt-5"
                 >
                   {quoteLoading ? "Getting quote..." : "Get started"}
@@ -823,7 +856,7 @@ export function Swap() {
             {(swapStatus === "signing" || swapStatus === "submitting") && (
               <div className="space-y-2">
                 <p className="text-center text-amber-300 font-medium py-2 text-sm">
-                  {swapStatus === "signing" ? "Check your wallet ? sign the request (it?s a signature, not a transaction)." : "Submitting..."}
+                  {swapStatus === "signing" ? "Check your wallet ? sign the request (it's a signature, not a transaction)." : "Submitting..."}
                 </p>
                 <p className="text-center text-slate-300 text-xs">If nothing appeared: check your wallet app for the request, or disconnect and reconnect. If you already signed, check your wallet balance or tx history ? the swap may have gone through; click Cancel to reset.</p>
                 <button
@@ -893,7 +926,7 @@ export function Swap() {
             EVM wallets only. Approve first if prompted. Tokens sent to address above.
           </p>
           <p className="text-xs text-slate-500 mt-1 text-center">
-            Gasless by DeltaChainLabs ? Powered by 0x
+            Gasless by DeltaChainLabs · Powered by 0x
           </p>
         </>
         </div>
