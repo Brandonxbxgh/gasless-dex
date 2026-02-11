@@ -441,7 +441,7 @@ export function Swap() {
 
   const doApproveForSwapQuote = useCallback(async () => {
     if (!swapQuote?.transaction?.to || !walletClient || !address) return;
-    const spender = swapQuote.transaction.to as `0x${string}`;
+    const spender = (swapQuote.issues?.allowance?.spender || swapQuote.transaction.to) as `0x${string}`;
     setApprovingInProgress(true);
     setSwapError(null);
     setSwapStatus("signing");
@@ -454,19 +454,19 @@ export function Swap() {
       });
       setSwapStatus("signing");
       const tx = swapQuote.transaction;
+      // Don't pass gas/gasPrice from 0x - let wallet use current network conditions
+      // (0x quotes can return stale gas estimates that cause tx failures)
       const hash = await walletClient.sendTransaction({
         to: tx.to as `0x${string}`,
         data: tx.data as `0x${string}`,
         value: BigInt(tx.value),
-        gas: tx.gas ? BigInt(tx.gas) : undefined,
-        gasPrice: tx.gasPrice ? BigInt(tx.gasPrice) : undefined,
       });
       setTxHash(hash);
       setSwapStatus("success");
     } catch (e) {
       let msg = e instanceof Error ? e.message : "Approval or swap failed";
       if (/rejected|declined/i.test(msg)) {
-        msg += " Receiving real native requires one tx (you pay gas). For a fully gasless swap, use the Gasless tab and choose WETH/WBNB/WMATIC in ?To?, not native.";
+        msg += " For zero-gas swaps, choose WETH/WBNB/WMATIC instead of native ETH/BNB/MATIC in the To field.";
       }
       setSwapError(msg);
       setSwapStatus("error");
@@ -483,12 +483,11 @@ export function Swap() {
     try {
       if (swapQuote?.transaction) {
         const tx = swapQuote.transaction;
+        // Don't pass gas/gasPrice - let wallet estimate (0x values can be stale and cause failures)
         const hash = await walletClient.sendTransaction({
           to: tx.to as `0x${string}`,
           data: tx.data as `0x${string}`,
           value: BigInt(tx.value),
-          gas: tx.gas ? BigInt(tx.gas) : undefined,
-          gasPrice: tx.gasPrice ? BigInt(tx.gasPrice) : undefined,
         });
         setTxHash(hash);
         setSwapStatus("success");
@@ -531,7 +530,7 @@ export function Swap() {
     } catch (e) {
       let msg = e instanceof Error ? e.message : "Swap failed";
       if (/rejected|declined/i.test(msg)) {
-        msg += " Receiving real native (ETH/BNB/MATIC) requires one approval transaction (you pay gas). For a fully gasless swap, choose WETH, WBNB, or WMATIC in To instead of native.";
+        msg += " For zero-gas swaps, choose WETH/WBNB/WMATIC instead of native in the To field.";
       }
       setSwapError(msg);
       setSwapStatus("error");
@@ -692,6 +691,16 @@ export function Swap() {
 
             {/* Buy panel */}
             <div className="rounded-2xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] p-4 sm:p-5">
+              {isBuyingNative && (
+                <div className="mb-3 rounded-xl bg-amber-500/15 border border-amber-500/30 px-3 py-2">
+                  <p className="text-sm font-medium text-amber-300">
+                    This swap requires gas. You will pay network fees to receive native {NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH"}.
+                  </p>
+                  <p className="text-xs text-amber-200/80 mt-0.5">
+                    For zero-gas swaps, choose {supportedChainId === 56 ? "WBNB" : supportedChainId === 137 ? "WMATIC" : "WETH"} instead of native.
+                  </p>
+                </div>
+              )}
               <p className="text-xs text-[var(--delta-text-muted)] mb-3">Buy</p>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
