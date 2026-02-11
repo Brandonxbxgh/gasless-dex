@@ -9,11 +9,11 @@ export function Header() {
   const pathname = usePathname();
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-slate-700/50 bg-slate-900/95 backdrop-blur supports-[backdrop-filter]:bg-slate-900/80">
+    <header className="sticky top-0 z-50 w-full border-b border-white/5 bg-[var(--delta-bg)]/95 backdrop-blur supports-[backdrop-filter]:bg-[var(--delta-bg)]/80">
       <nav className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <Link
           href="/"
-          className="text-lg font-semibold tracking-tight text-white hover:text-sky-300 transition-colors"
+          className="text-lg font-semibold tracking-tight text-white hover:text-[var(--swap-accent)] transition-colors"
         >
           DeltaChainLabs
         </Link>
@@ -22,7 +22,7 @@ export function Header() {
             href="/"
             className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
               pathname === "/"
-                ? "bg-sky-500/20 text-sky-300"
+                ? "bg-[var(--swap-accent)]/20 text-[var(--swap-accent)]"
                 : "text-slate-300 hover:bg-slate-800 hover:text-white"
             }`}
           >
@@ -32,7 +32,7 @@ export function Header() {
             href="/how-it-works"
             className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
               pathname === "/how-it-works"
-                ? "bg-sky-500/20 text-sky-300"
+                ? "bg-[var(--swap-accent)]/20 text-[var(--swap-accent)]"
                 : "text-slate-300 hover:bg-slate-800 hover:text-white"
             }`}
           >
