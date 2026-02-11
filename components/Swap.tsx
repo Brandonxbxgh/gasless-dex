@@ -157,6 +157,8 @@ export function Swap() {
   }, [isConnected, address]);
 
   const [sellAmount, setSellAmount] = useState("");
+  const [amountMode, setAmountMode] = useState<"token" | "usd">("token");
+  const [usdInput, setUsdInput] = useState("");
   const [quote, setQuote] = useState<GaslessQuoteResponse | null>(null);
   const [swapQuote, setSwapQuote] = useState<SwapQuoteResponse | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
@@ -209,19 +211,44 @@ export function Swap() {
   const displaySellSymbol = isSellingNative ? (NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH") : sellSymbolForLogic;
   const sellSymbol = displaySellSymbol;
   const minSellAmount = MIN_SELL_AMOUNT[sellSymbolForLogic] ?? 1;
-  const amountNum = sellAmount ? parseFloat(sellAmount) : 0;
+  const effectiveSellAmount = amountMode === "usd" && usdInput
+    ? (() => {
+        const price = sellTokenPriceUsd;
+        if (!price || price <= 0) return "";
+        const amt = parseFloat(usdInput) / price;
+        return amt > 0 ? String(amt) : "";
+      })()
+    : sellAmount;
+  const amountNum = effectiveSellAmount ? parseFloat(effectiveSellAmount) : 0;
   const isBelowMin = amountNum > 0 && amountNum < minSellAmount;
 
+  const [sellTokenPriceUsd, setSellTokenPriceUsd] = useState<number | null>(null);
+  useEffect(() => {
+    const addr = isSellingNative ? WRAPPED_NATIVE[supportedChainId] : sellToken;
+    if (!addr) return;
+    fetch(`/api/token-price?chainId=${supportedChainId}&address=${encodeURIComponent(addr)}`)
+      .then((r) => r.json())
+      .then((d: { usd?: number | null }) => setSellTokenPriceUsd(typeof d?.usd === "number" ? d.usd : null))
+      .catch(() => setSellTokenPriceUsd(null));
+  }, [supportedChainId, sellToken, isSellingNative]);
+
   const fetchQuote = useCallback(async () => {
-    if (!address || !sellAmount || parseFloat(sellAmount) <= 0) return;
+    const amountToUse = amountMode === "usd" && usdInput
+      ? (sellTokenPriceUsd && sellTokenPriceUsd > 0 ? parseFloat(usdInput) / sellTokenPriceUsd : 0)
+      : parseFloat(sellAmount);
+    if (!address || !(amountMode === "usd" ? usdInput : sellAmount) || amountToUse <= 0) return;
     const sellSymbolForLogic = tokens.find((t) => t.address === sellToken)?.symbol ?? "USDC";
     const minAmount = MIN_SELL_AMOUNT[sellSymbolForLogic] ?? 1;
-    const amountNum = parseFloat(sellAmount);
+    const amountNum = amountToUse;
     if (amountNum < minAmount) {
       const displaySym = isSellingNative ? (NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH") : sellSymbolForLogic;
       setQuoteError(`Minimum sell amount is ${minAmount} ${displaySym}. Try at least ${minAmount} ${displaySym} or check your wallet balance.`);
       setQuote(null);
       setSwapQuote(null);
+      return;
+    }
+    if (amountMode === "usd" && (!sellTokenPriceUsd || sellTokenPriceUsd <= 0)) {
+      setQuoteError("Unable to get token price for USD conversion. Try token amount mode.");
       return;
     }
     setQuoteError(null);
@@ -231,7 +258,7 @@ export function Swap() {
     setQuoteLoading(true);
     try {
       const decimals = getTokenDecimals(sellSymbolForLogic, supportedChainId);
-      const amountWei = parseUnits(sellAmount, decimals).toString();
+      const amountWei = parseUnits(String(amountToUse), decimals).toString();
 
       const useSwapApi = isSellingNative || isBuyingNative;
       if (useSwapApi) {
@@ -306,7 +333,8 @@ export function Swap() {
         lower.includes("provided sell amount too small");
       if (isAmountOrBalanceError && amountNum < minAmount) {
         const displaySym = isSellingNative ? (NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH") : sellSymbolForLogic;
-        setQuoteError(`Sell at least ${minAmount} ${displaySym} (you entered ${sellAmount}). Check your wallet balance.`);
+        const entered = amountMode === "usd" ? `$${usdInput}` : sellAmount;
+        setQuoteError(`Sell at least ${minAmount} ${displaySym} (you entered ${entered}). Check your wallet balance.`);
       } else if (
         (lower.includes("sell amount too small") || lower.includes("provided sell amount too small")) &&
         amountNum >= minAmount
@@ -326,7 +354,7 @@ export function Swap() {
     } finally {
       setQuoteLoading(false);
     }
-  }, [address, supportedChainId, sellToken, buyToken, sellAmount, feeParams, tokens, receiveAddress, isSellingNative, isBuyingNative]);
+  }, [address, supportedChainId, sellToken, buyToken, sellAmount, usdInput, amountMode, sellTokenPriceUsd, feeParams, tokens, receiveAddress, isSellingNative, isBuyingNative]);
 
   type ApprovalPayload = {
     type: string;
@@ -533,21 +561,6 @@ export function Swap() {
         DeltaChainLabs
       </h1>
       <p className="text-center text-slate-400 text-sm mb-4">Swap</p>
-      <div className="flex flex-wrap justify-center gap-2 mb-5">
-        {supportedChains.map((ch) => (
-          <button
-            key={ch.id}
-            onClick={() => switchChain?.({ chainId: ch.id })}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition ${
-              supportedChainId === ch.id
-                ? "bg-[var(--swap-green)] text-white shadow-[0_0_12px_var(--swap-green-glow)]"
-                : "bg-[var(--swap-pill-bg)] text-slate-300 border border-slate-600 hover:text-white hover:border-slate-500"
-            }`}
-          >
-            {ch.name}
-          </button>
-        ))}
-      </div>
 
       {!isConnected ? (
         <div className="py-8 flex flex-col items-center gap-4">
@@ -592,40 +605,93 @@ export function Swap() {
           </div>
 
           <div className="space-y-3">
-            {/* From row: pill = amount + token */}
+            {/* From row: [Network pill] [Token + amount pill] */}
             <div>
               <label className="text-xs font-medium text-slate-400 block mb-1.5 ml-1">From</label>
               {isSellingNative && (
                 <p className="text-xs text-amber-400/90 mb-1 ml-1">Sending native {displaySellSymbol} (you pay gas for this swap)</p>
               )}
-              <div className="flex items-center gap-2 rounded-full bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] px-4 py-3 min-h-[3.25rem]">
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="0.0"
-                  value={sellAmount}
-                  onChange={(e) => {
-                    const v = e.target.value.replace(/[^0-9.]/g, "");
-                    setSellAmount(v);
-                  }}
-                  className="flex-1 min-w-0 bg-transparent text-white text-lg font-medium outline-none placeholder:text-slate-500 focus:ring-0"
-                />
+              <div className="flex items-stretch gap-2">
                 <select
-                  value={sellToken}
-                  onChange={(e) => {
-                    setSellToken(e.target.value as `0x${string}`);
-                    setQuote(null);
-                  }}
-                  className="bg-transparent text-[var(--swap-green-bright)] font-medium text-sm min-w-[5rem] sm:min-w-[6rem] cursor-pointer focus:ring-0 border-0 py-1 pr-6 appearance-none bg-no-repeat bg-right"
-                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234ade80'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
-                  aria-label="Select token to sell"
+                  value={supportedChainId}
+                  onChange={(e) => switchChain?.({ chainId: Number(e.target.value) as SupportedChainId })}
+                  className="rounded-full bg-[var(--swap-green)] text-white text-sm font-medium px-4 py-3 border-0 cursor-pointer focus:ring-2 focus:ring-[var(--swap-green-bright)] appearance-none bg-no-repeat bg-right pr-10 min-w-[7rem]"
+                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
+                  aria-label="Select network"
                 >
-                  {tokens.map((t) => (
-                    <option key={t.address} value={t.address}>
-                      {t.address === WRAPPED_NATIVE[supportedChainId] ? (NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH") : t.symbol}
-                    </option>
+                  {supportedChains.map((ch) => (
+                    <option key={ch.id} value={ch.id}>{ch.name}</option>
                   ))}
                 </select>
+                <div className="flex-1 flex flex-col rounded-full bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] overflow-hidden min-h-[3.25rem]">
+                  <div className="flex items-center gap-2 px-4 py-2 flex-1">
+                    <div className="flex-1 flex flex-col min-w-0">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => { setAmountMode("token"); setQuote(null); }}
+                          className={`text-xs font-medium ${amountMode === "token" ? "text-[var(--swap-green-bright)]" : "text-slate-500 hover:text-slate-300"}`}
+                        >
+                          Token
+                        </button>
+                        <span className="text-slate-600">|</span>
+                        <button
+                          type="button"
+                          onClick={() => { setAmountMode("usd"); setQuote(null); }}
+                          className={`text-xs font-medium ${amountMode === "usd" ? "text-[var(--swap-green-bright)]" : "text-slate-500 hover:text-slate-300"}`}
+                        >
+                          $
+                        </button>
+                      </div>
+                      {amountMode === "token" ? (
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="0.0"
+                          value={sellAmount}
+                          onChange={(e) => {
+                            const v = e.target.value.replace(/[^0-9.]/g, "");
+                            setSellAmount(v);
+                            setQuote(null);
+                          }}
+                          className="w-full bg-transparent text-white text-lg font-medium outline-none placeholder:text-slate-500 focus:ring-0"
+                        />
+                      ) : (
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-slate-400 text-lg font-medium">$</span>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="0.00"
+                            value={usdInput}
+                            onChange={(e) => {
+                              const v = e.target.value.replace(/[^0-9.]/g, "");
+                              setUsdInput(v);
+                              setQuote(null);
+                            }}
+                            className="w-full min-w-0 bg-transparent text-white text-lg font-medium outline-none placeholder:text-slate-500 focus:ring-0"
+                          />
+                        </div>
+                      )}
+                    </div>
+                    <select
+                      value={sellToken}
+                      onChange={(e) => {
+                        setSellToken(e.target.value as `0x${string}`);
+                        setQuote(null);
+                      }}
+                      className="bg-transparent text-[var(--swap-green-bright)] font-medium text-sm min-w-[5rem] sm:min-w-[6rem] cursor-pointer focus:ring-0 border-0 py-1 pr-6 appearance-none bg-no-repeat bg-right"
+                      style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234ade80'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
+                      aria-label="Select token to sell"
+                    >
+                      {tokens.map((t) => (
+                        <option key={t.address} value={t.address}>
+                          {t.address === WRAPPED_NATIVE[supportedChainId] ? (NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH") : t.symbol}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -643,7 +709,7 @@ export function Swap() {
               </button>
             </div>
 
-            {/* To row: pill = amount + token */}
+            {/* To row: [Network pill] [Token + amount pill] */}
             <div>
               <label className="text-xs font-medium text-slate-400 block mb-1.5 ml-1">To</label>
               {isBuyingNative && (
@@ -652,32 +718,45 @@ export function Swap() {
               {buyToken === WRAPPED_NATIVE[supportedChainId] && (
                 <p className="text-xs text-slate-300 mb-1 ml-1">Receiving {tokens.find((t) => t.address === buyToken)?.symbol ?? "WETH"} (wrapped), not native</p>
               )}
-              <div className="flex items-center gap-2 rounded-full bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] px-4 py-3 min-h-[3.25rem]">
-                <span className="flex-1 min-w-0 text-[var(--swap-green-bright)] text-lg font-medium truncate">
-                  {(quote || swapQuote)
-                    ? formatUnits(
-                        BigInt((quote ?? swapQuote)!.buyAmount),
-                        isBuyingNative ? 18 : getTokenDecimals(tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH", supportedChainId)
-                      )
-                    : "0.0"}
-                </span>
+              <div className="flex items-stretch gap-2">
                 <select
-                  value={buyToken}
-                  onChange={(e) => {
-                    setBuyToken(e.target.value as `0x${string}`);
-                    setQuote(null);
-                    setSwapQuote(null);
-                  }}
-                  className="bg-transparent text-[var(--swap-green-bright)] font-medium text-sm min-w-[5rem] sm:min-w-[6rem] cursor-pointer focus:ring-0 border-0 py-1 pr-6 appearance-none bg-no-repeat bg-right"
+                  value={supportedChainId}
+                  onChange={(e) => switchChain?.({ chainId: Number(e.target.value) as SupportedChainId })}
+                  className="rounded-full bg-[var(--swap-pill-bg)] text-slate-200 border border-[var(--swap-pill-border)] text-sm font-medium px-4 py-3 cursor-pointer focus:ring-2 focus:ring-[var(--swap-green)] appearance-none bg-no-repeat bg-right pr-10 min-w-[7rem]"
                   style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234ade80'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
-                  aria-label="Select token to receive"
+                  aria-label="Select network (same chain)"
                 >
-                  {buyTokenOptions.map((t) => (
-                    <option key={t.address} value={t.address}>
-                      {"isNative" in t && t.isNative ? `${t.symbol} (native)` : t.symbol}
-                    </option>
+                  {supportedChains.map((ch) => (
+                    <option key={ch.id} value={ch.id}>{ch.name}</option>
                   ))}
                 </select>
+                <div className="flex-1 flex items-center gap-2 rounded-full bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] px-4 py-3 min-h-[3.25rem]">
+                  <span className="flex-1 min-w-0 text-[var(--swap-green-bright)] text-lg font-medium truncate">
+                    {(quote || swapQuote)
+                      ? formatUnits(
+                          BigInt((quote ?? swapQuote)!.buyAmount),
+                          isBuyingNative ? 18 : getTokenDecimals(tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH", supportedChainId)
+                        )
+                      : "0.0"}
+                  </span>
+                  <select
+                    value={buyToken}
+                    onChange={(e) => {
+                      setBuyToken(e.target.value as `0x${string}`);
+                      setQuote(null);
+                      setSwapQuote(null);
+                    }}
+                    className="bg-transparent text-[var(--swap-green-bright)] font-medium text-sm min-w-[5rem] sm:min-w-[6rem] cursor-pointer focus:ring-0 border-0 py-1 pr-6 appearance-none bg-no-repeat bg-right"
+                    style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234ade80'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
+                    aria-label="Select token to receive"
+                  >
+                    {buyTokenOptions.map((t) => (
+                      <option key={t.address} value={t.address}>
+                        {"isNative" in t && t.isNative ? `${t.symbol} (native)` : t.symbol}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
               {(quote?.fees?.integratorFee || swapQuote?.fees?.integratorFee) && (
                 <p className="text-xs text-slate-200 mt-2 ml-1">
@@ -718,7 +797,7 @@ export function Swap() {
                 )}
                 <button
                   onClick={fetchQuote}
-                  disabled={!sellAmount || amountNum <= 0 || quoteLoading || isBelowMin}
+                  disabled={!(amountMode === "usd" ? usdInput : sellAmount) || amountNum <= 0 || quoteLoading || isBelowMin || (amountMode === "usd" && !sellTokenPriceUsd)}
                   className="w-full py-3.5 rounded-full bg-[var(--swap-green)] hover:bg-[var(--swap-green-bright)] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold uppercase tracking-wide transition shadow-[0_0_20px_var(--swap-green-glow)]"
                 >
                   {quoteLoading ? "Getting quote..." : "Get Quote"}
