@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { useAccount, useChainId, useSwitchChain, useWalletClient, usePublicClient, useDisconnect } from "wagmi";
-import { parseUnits, formatUnits, isAddress, maxUint256, waitForTransactionReceipt } from "viem";
+import { parseUnits, formatUnits, isAddress, maxUint256 } from "viem";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import {
   getGaslessQuote,
@@ -479,7 +479,7 @@ export function Swap() {
       });
       setTxHash(hash);
       if (publicClient) {
-        const receipt = await waitForTransactionReceipt(publicClient, { hash });
+        const receipt = await publicClient.waitForTransactionReceipt({ hash });
         if (receipt.status === "reverted") {
           setSwapError("Transaction failed on chain. Try again or use WETH instead of native ETH for gasless swaps.");
           setSwapStatus("error");
@@ -516,7 +516,7 @@ export function Swap() {
         });
         setTxHash(hash);
         if (publicClient) {
-          const receipt = await waitForTransactionReceipt(publicClient, { hash });
+          const receipt = await publicClient.waitForTransactionReceipt({ hash });
           if (receipt.status === "reverted") {
             setSwapError("Transaction failed on chain. Try again or use WETH instead of native ETH for gasless swaps.");
             setSwapStatus("error");
