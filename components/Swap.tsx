@@ -192,6 +192,16 @@ export function Swap() {
     [tokens, supportedChainId]
   );
 
+  const [sellTokenPriceUsd, setSellTokenPriceUsd] = useState<number | null>(null);
+  useEffect(() => {
+    const addr = isSellingNative ? WRAPPED_NATIVE[supportedChainId] : sellToken;
+    if (!addr) return;
+    fetch(`/api/token-price?chainId=${supportedChainId}&address=${encodeURIComponent(addr)}`)
+      .then((r) => r.json())
+      .then((d: { usd?: number | null }) => setSellTokenPriceUsd(typeof d?.usd === "number" ? d.usd : null))
+      .catch(() => setSellTokenPriceUsd(null));
+  }, [supportedChainId, sellToken, isSellingNative]);
+
   const feeParams = useMemo(() => {
     if (!SWAP_FEE_RECIPIENT) return {};
     const preferredFeeToken = getPreferredFeeToken(sellToken, buyToken, tokens);
@@ -221,16 +231,6 @@ export function Swap() {
     : sellAmount;
   const amountNum = effectiveSellAmount ? parseFloat(effectiveSellAmount) : 0;
   const isBelowMin = amountNum > 0 && amountNum < minSellAmount;
-
-  const [sellTokenPriceUsd, setSellTokenPriceUsd] = useState<number | null>(null);
-  useEffect(() => {
-    const addr = isSellingNative ? WRAPPED_NATIVE[supportedChainId] : sellToken;
-    if (!addr) return;
-    fetch(`/api/token-price?chainId=${supportedChainId}&address=${encodeURIComponent(addr)}`)
-      .then((r) => r.json())
-      .then((d: { usd?: number | null }) => setSellTokenPriceUsd(typeof d?.usd === "number" ? d.usd : null))
-      .catch(() => setSellTokenPriceUsd(null));
-  }, [supportedChainId, sellToken, isSellingNative]);
 
   const fetchQuote = useCallback(async () => {
     const amountToUse = amountMode === "usd" && usdInput
