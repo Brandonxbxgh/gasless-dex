@@ -5,7 +5,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "DeltaChainLabs | Gasless Swap",
-  description: "Swap stable ↔ native with zero gas. Sign a message, we pay the gas.",
+  description: "Swap tokens with zero gas. Sign a message, we pay the gas.",
 };
 
 export default function RootLayout({

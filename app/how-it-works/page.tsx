@@ -60,10 +60,10 @@ export default function HowItWorksPage() {
           </h2>
           <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 sm:p-5 text-slate-200 text-sm space-y-3">
             <p>
-              Pick a chain, enter an amount, choose From/To tokens, and hit <strong>Get Quote</strong>. You can sell tokens (USDC, USDT, WETH, etc.) or native (ETH, BNB, MATIC), and receive any listed token or real native.
+              Pick a chain, enter an amount, choose From/To tokens, and hit <strong>Get started</strong>. You can sell tokens (USDC, USDT, WETH, etc.) or native (ETH, BNB, MATIC), and receive any listed token or real native.
             </p>
             <p>
-              Before you confirm, the app shows exactly what you’ll do: <strong>Sign only</strong> (no gas — we submit the tx), or <strong>Approve / one transaction</strong> (you pay gas once). So you always see whether the swap is gasless or requires gas before confirming.
+              Before you confirm, the app shows exactly what you’ll do: <strong>Sign only</strong> (no gas - we submit the tx), or <strong>Approve / one transaction</strong> (you pay gas once). So you always see whether the swap is gasless or requires gas before confirming.
             </p>
           </div>
         </section>
@@ -140,7 +140,7 @@ export default function HowItWorksPage() {
                       {(CHAIN_TOKENS[chain.id] ?? []).map((t) => t.symbol).join(", ")}
                     </td>
                     <td className="py-3 px-4 text-sky-300">
-                      {NATIVE_BY_CHAIN[chain.id] ?? "—"}
+                      {NATIVE_BY_CHAIN[chain.id] ?? "-"}
                     </td>
                   </tr>
                 ))}

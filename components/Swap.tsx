@@ -359,7 +359,7 @@ export function Swap() {
         const onBnb = supportedChainId === 56;
         setQuoteError(
           onBnb
-            ? "On BNB Smart Chain the protocol requires a higher minimum for gasless swaps (try $50?100+ USDT), or use Ethereum/Base/Arbitrum for smaller amounts."
+            ? "On BNB Smart Chain the protocol requires a higher minimum for gasless swaps (try $50-100+ USDT), or use Ethereum/Base/Arbitrum for smaller amounts."
             : "The protocol requires a larger minimum for this pair on this network. Try a higher amount, or use Ethereum/Base/Arbitrum where smaller trades may be supported."
         );
       } else if (lower.includes("insufficient balance") && isSellingNative) {
@@ -596,6 +596,14 @@ export function Swap() {
       ? parseFloat(usdInput)
       : null;
 
+  const feeDisplay = useMemo(() => {
+    const fee = quote?.fees?.integratorFee ?? swapQuote?.fees?.integratorFee;
+    if (!fee) return null;
+    const feeSym = tokens.find((t) => t.address === fee.token)?.symbol ?? sellSymbol ?? NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH";
+    const feeDec = getTokenDecimals(feeSym, supportedChainId);
+    return `${formatUnits(BigInt(fee.amount), feeDec)} ${feeSym}`;
+  }, [quote?.fees?.integratorFee, swapQuote?.fees?.integratorFee, tokens, sellSymbol, supportedChainId]);
+
   return (
     <div className="w-full max-w-md mx-auto rounded-3xl border p-6 sm:p-8 bg-[var(--delta-card)] border-[var(--swap-pill-border)] shadow-xl">
       <h1 className="text-2xl sm:text-3xl font-bold text-center text-white mb-1">
@@ -725,14 +733,7 @@ export function Swap() {
             {/* Buy panel */}
             <div className="rounded-2xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] p-4 sm:p-5">
               {isBuyingNative && (
-                <div className="mb-3 rounded-xl bg-amber-500/15 border border-amber-500/30 px-3 py-2">
-                  <p className="text-sm font-medium text-amber-300">
-                    This swap requires gas. You will pay network fees to receive native {NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH"}.
-                  </p>
-                  <p className="text-xs text-amber-200/80 mt-0.5">
-                    For zero-gas swaps, choose {supportedChainId === 56 ? "WBNB" : supportedChainId === 137 ? "WMATIC" : "WETH"} instead of native.
-                  </p>
-                </div>
+                <p className="text-xs text-amber-400 mb-2">Receiving native {NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH"} (network fees apply). Use {supportedChainId === 56 ? "WBNB" : supportedChainId === 137 ? "WMATIC" : "WETH"} for gasless.</p>
               )}
               <p className="text-xs text-[var(--delta-text-muted)] mb-3">Buy</p>
               <div className="flex items-start justify-between gap-3">
@@ -747,7 +748,7 @@ export function Swap() {
                   </div>
                   {receiveUsd != null && receiveUsd > 0 && (
                     <p className="text-sm text-[var(--delta-text-muted)] mt-1">
-                      ? ${receiveUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+                      ~ ${receiveUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
                     </p>
                   )}
                 </div>
@@ -765,30 +766,8 @@ export function Swap() {
                   ))}
                 </select>
               </div>
-              {isBuyingNative && (
-                <p className="text-xs text-[var(--swap-accent)] mt-2">Receiving native</p>
-              )}
-              {buyToken === WRAPPED_NATIVE[supportedChainId] && (
-                <p className="text-xs text-slate-400 mt-1">Receiving wrapped</p>
-              )}
-              {(quote?.fees?.integratorFee || swapQuote?.fees?.integratorFee) && (
-                <p className="text-xs text-slate-400 mt-1.5">
-                  Fee (0.1%): {quote?.fees?.integratorFee
-                    ? (() => {
-                        const feeTokenAddr = quote.fees.integratorFee.token;
-                        const feeSym = tokens.find((t) => t.address === feeTokenAddr)?.symbol ?? sellSymbol;
-                        const feeDec = getTokenDecimals(feeSym, supportedChainId);
-                        return `${formatUnits(BigInt(quote.fees.integratorFee.amount), feeDec)} ${feeSym}`;
-                      })()
-                    : swapQuote?.fees?.integratorFee
-                      ? (() => {
-                          const feeTokenAddr = swapQuote.fees.integratorFee.token;
-                          const feeSym = tokens.find((t) => t.address === feeTokenAddr)?.symbol ?? NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH";
-                          const feeDec = getTokenDecimals(feeSym, supportedChainId);
-                          return `${formatUnits(BigInt(swapQuote.fees.integratorFee.amount), feeDec)} ${feeSym}`;
-                        })()
-                      : ""}
-                </p>
+              {feeDisplay && (
+                <p className="text-xs text-slate-400 mt-1.5">Fee (0.1%): {feeDisplay}</p>
               )}
             </div>
           </div>
@@ -811,54 +790,41 @@ export function Swap() {
                   {quoteLoading ? "Getting quote..." : "Get started"}
                 </button>
                 {quote && !isSellingNative && !quote.approval && (
-                  <div className="space-y-1">
-                    <p className="text-amber-300 text-xs">Step 1: Approve {sellSymbol} (pay gas once)</p>
-                    <button
-                      type="button"
-                      onClick={doApprove}
-                      disabled={approvingInProgress}
-                      className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-semibold text-sm"
-                    >
-                      {approvingInProgress ? "Check wallet?" : `Approve ${sellSymbol}`}
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={doApprove}
+                    disabled={approvingInProgress}
+                    className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-semibold text-sm"
+                  >
+                    {approvingInProgress ? "Check wallet" : `Approve ${sellSymbol}`}
+                  </button>
                 )}
                 {swapQuote && !isSellingNative && (
-                  <div className="space-y-1">
-                    <p className="text-amber-300 text-xs">Step 1: Approve {sellSymbol} (pay gas once)</p>
-                    <button
-                      type="button"
-                      onClick={doApproveForSwapQuote}
-                      disabled={approvingInProgress}
-                      className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-semibold text-sm"
-                    >
-                      {approvingInProgress ? "Check wallet?" : "Approve & Swap"}
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={doApproveForSwapQuote}
+                    disabled={approvingInProgress}
+                    className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-semibold text-sm"
+                  >
+                    {approvingInProgress ? "Check wallet" : "Approve & Swap"}
+                  </button>
                 )}
-                {(quote || swapQuote) && (
-                  <>
-                    {(quote && !isSellingNative && !quote.approval) && (
-                      <p className="text-slate-400 text-xs">Step 2: Sign the swap (no gas)</p>
-                    )}
-                    {!(swapQuote && !isSellingNative) && (
-                      <button
-                        onClick={executeSwap}
-                        className="w-full py-4 rounded-2xl bg-[#2d2d3d] hover:bg-[#3d3d4d] text-[var(--swap-accent)] font-semibold text-base transition"
-                      >
-                        {swapQuote ? "Sign & Swap (you pay gas)" : "Sign & Swap (No Gas!)"}
-                      </button>
-                    )}
-                  </>
+                {(quote || swapQuote) && !(swapQuote && !isSellingNative) && (
+                  <button
+                    onClick={executeSwap}
+                    className="w-full py-4 rounded-2xl bg-[#2d2d3d] hover:bg-[#3d3d4d] text-[var(--swap-accent)] font-semibold text-base transition"
+                  >
+                    Swap
+                  </button>
                 )}
               </>
             )}
             {(swapStatus === "signing" || swapStatus === "submitting") && (
               <div className="space-y-2">
                 <p className="text-center text-amber-300 font-medium py-2 text-sm">
-                  {swapStatus === "signing" ? "Check your wallet ? sign the request (it's a signature, not a transaction)." : "Submitting..."}
+                  {swapStatus === "signing" ? "Check your wallet - sign the request (signature, not a transaction)." : "Submitting..."}
                 </p>
-                <p className="text-center text-slate-300 text-xs">If nothing appeared: check your wallet app for the request, or disconnect and reconnect. If you already signed, check your wallet balance or tx history ? the swap may have gone through; click Cancel to reset.</p>
+                <p className="text-center text-slate-300 text-xs">If nothing appeared: check your wallet app for the request, or disconnect and reconnect. If you already signed, check your wallet balance or tx history - the swap may have gone through; click Cancel to reset.</p>
                 <button
                   type="button"
                   onClick={resetSwap}
@@ -899,7 +865,7 @@ export function Swap() {
                       disabled={approvingInProgress}
                       className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-semibold"
                     >
-                      {approvingInProgress ? "Check wallet?" : `Approve ${sellSymbol} (pay gas once)`}
+                      {approvingInProgress ? "Check wallet" : `Approve ${sellSymbol}`}
                     </button>
                   )}
                   {swapQuote && !isSellingNative && (
@@ -908,7 +874,7 @@ export function Swap() {
                       disabled={approvingInProgress}
                       className="w-full py-3 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-900 font-semibold"
                     >
-                      {approvingInProgress ? "Check wallet?" : `Approve ${sellSymbol} & Swap`}
+                      {approvingInProgress ? "Check wallet" : "Approve & Swap"}
                     </button>
                   )}
                   <button
@@ -922,11 +888,11 @@ export function Swap() {
             )}
           </div>
 
-          <p className="text-xs text-slate-500 mt-4 text-center max-w-xs mx-auto">
-            EVM wallets only. Approve first if prompted. Tokens sent to address above.
+          <p className="text-xs text-slate-500 mt-4 text-center">
+            Approve first if prompted.
           </p>
           <p className="text-xs text-slate-500 mt-1 text-center">
-            Gasless by DeltaChainLabs · Powered by 0x
+            DeltaChainLabs | Powered by 0x
           </p>
         </>
         </div>
