@@ -457,7 +457,8 @@ export function Swap() {
 
   const doApproveForSwapQuote = useCallback(async () => {
     if (!swapQuote?.transaction?.to || !walletClient || !address) return;
-    const spender = (swapQuote.issues?.allowance?.spender || swapQuote.transaction.to) as `0x${string}`;
+    // 0x: use allowanceTarget or issues.allowance.spender - never Settler, only AllowanceHolder
+    const spender = (swapQuote.allowanceTarget || swapQuote.issues?.allowance?.spender || swapQuote.transaction.to) as `0x${string}`;
     setApprovingInProgress(true);
     setSwapError(null);
     setSwapStatus("signing");
@@ -469,13 +470,32 @@ export function Swap() {
         args: [spender, maxUint256],
       });
       setSwapStatus("signing");
-      const tx = swapQuote.transaction;
-      // Don't pass gas/gasPrice from 0x - let wallet use current network conditions
-      // (0x quotes can return stale gas estimates that cause tx failures)
+      // Refetch quote - 0x quotes expire ~60s, approval can take 30-60s. Stale quote = revert.
+      const freshQuote = await getSwapQuote({
+        chainId: supportedChainId,
+        sellToken,
+        buyToken,
+        sellAmount: swapQuote.sellAmount,
+        taker: address,
+        recipient: receiveAddress && receiveAddress !== address ? receiveAddress : undefined,
+        swapFeeBps: feeParams.swapFeeBps,
+        swapFeeRecipient: feeParams.swapFeeRecipient,
+        swapFeeToken: feeParams.swapFeeToken ?? sellToken,
+        tradeSurplusRecipient: feeParams.tradeSurplusRecipient,
+        slippageBps: 100,
+      });
+      if (!freshQuote?.transaction) {
+        setSwapError("Quote expired. Please try again.");
+        setSwapStatus("error");
+        setApprovingInProgress(false);
+        return;
+      }
+      setSwapQuote(freshQuote);
+      const tx = freshQuote.transaction;
       const hash = await walletClient.sendTransaction({
         to: tx.to as `0x${string}`,
         data: tx.data as `0x${string}`,
-        value: BigInt(tx.value),
+        value: BigInt(tx.value || 0),
       });
       setTxHash(hash);
       if (publicClient) {
@@ -498,7 +518,7 @@ export function Swap() {
     } finally {
       setApprovingInProgress(false);
     }
-  }, [swapQuote, walletClient, publicClient, address, sellToken]);
+  }, [swapQuote, walletClient, publicClient, address, sellToken, buyToken, supportedChainId, receiveAddress, feeParams]);
 
   const executeSwap = useCallback(async () => {
     if ((!quote && !swapQuote) || !address || !walletClient) return;
@@ -508,11 +528,10 @@ export function Swap() {
     try {
       if (swapQuote?.transaction) {
         const tx = swapQuote.transaction;
-        // Don't pass gas/gasPrice - let wallet estimate (0x values can be stale and cause failures)
         const hash = await walletClient.sendTransaction({
           to: tx.to as `0x${string}`,
           data: tx.data as `0x${string}`,
-          value: BigInt(tx.value),
+          value: BigInt(tx.value || 0),
         });
         setTxHash(hash);
         if (publicClient) {

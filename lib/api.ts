@@ -127,6 +127,8 @@ export interface SwapQuoteResponse {
   sellAmount: string;
   buyToken: string;
   sellToken: string;
+  /** 0x returns this - use for approval instead of transaction.to when present */
+  allowanceTarget?: string;
   transaction: {
     to: string;
     data: string;
