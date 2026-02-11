@@ -528,19 +528,20 @@ export function Swap() {
   }, [sellToken, buyToken, supportedChainId]);
 
   return (
-    <div className="w-full max-w-md mx-auto rounded-2xl border-2 border-sky-400/50 p-4 sm:p-6 shadow-[0_0_32px_rgba(14,165,233,0.15)] bg-[var(--delta-card)]">
-      <h1 className="text-xl sm:text-2xl font-bold text-center mb-4 bg-gradient-to-r from-cyan-400 via-sky-400 to-fuchsia-400 bg-clip-text text-transparent">
+    <div className="w-full max-w-md mx-auto rounded-2xl border-2 p-4 sm:p-6 bg-[var(--delta-card)] shadow-[0_0_32px_var(--swap-green-glow)] border-[var(--swap-pill-border)]">
+      <h1 className="text-xl sm:text-2xl font-bold text-center mb-1 text-[var(--swap-green-bright)]">
         DeltaChainLabs
       </h1>
+      <p className="text-center text-slate-400 text-sm mb-4">Swap</p>
       <div className="flex flex-wrap justify-center gap-2 mb-5">
         {supportedChains.map((ch) => (
           <button
             key={ch.id}
             onClick={() => switchChain?.({ chainId: ch.id })}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition border ${
+            className={`px-4 py-2 rounded-full text-sm font-medium transition ${
               supportedChainId === ch.id
-                ? "bg-sky-500/20 text-white border-sky-400/60 shadow-[0_0_12px_rgba(14,165,233,0.2)]"
-                : "bg-transparent text-slate-300 border-slate-500/70 hover:text-white hover:border-slate-400"
+                ? "bg-[var(--swap-green)] text-white shadow-[0_0_12px_var(--swap-green-glow)]"
+                : "bg-[var(--swap-pill-bg)] text-slate-300 border border-slate-600 hover:text-white hover:border-slate-500"
             }`}
           >
             {ch.name}
@@ -556,7 +557,7 @@ export function Swap() {
       ) : (
         <div key={address ?? "connected"}>
         <>
-          <div className="rounded-lg bg-slate-800/70 border border-slate-600 px-3 py-2 mb-4 space-y-1">
+          <div className="rounded-2xl bg-[var(--swap-pill-bg)] border border-slate-600/80 px-4 py-3 mb-4 space-y-1">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <p className="text-xs text-slate-200">
                 Connected: <span className="text-white font-mono">{address ? truncateAddress(address) : ""}</span>
@@ -582,7 +583,7 @@ export function Swap() {
                   setCustomRecipient(e.target.value);
                   setQuote(null);
                 }}
-                className="w-full bg-slate-700/80 text-white text-sm rounded-lg px-3 py-2 border border-slate-600 placeholder:text-slate-500 focus:ring-2 focus:ring-sky-400 focus:border-sky-400/50"
+                className="w-full bg-slate-800/80 text-white text-sm rounded-full px-4 py-2 border border-slate-600 placeholder:text-slate-500 focus:ring-2 focus:ring-[var(--swap-green)] focus:border-[var(--swap-pill-border)]"
               />
               {customRecipient.trim() && !isAddress(customRecipient.trim()) && (
                 <p className="text-xs text-amber-400 mt-1">Enter a valid EVM address</p>
@@ -591,13 +592,13 @@ export function Swap() {
           </div>
 
           <div className="space-y-3">
-            {/* From row: amount + token dropdown */}
-            <div className="rounded-xl bg-slate-800/50 p-3 sm:p-4 border border-slate-600/80">
-              <label className="text-xs font-medium text-white block mb-2">From</label>
+            {/* From row: pill = amount + token */}
+            <div>
+              <label className="text-xs font-medium text-slate-400 block mb-1.5 ml-1">From</label>
               {isSellingNative && (
-                <p className="text-xs text-amber-400/90 mb-1">Sending native {displaySellSymbol} (you pay gas for this swap)</p>
+                <p className="text-xs text-amber-400/90 mb-1 ml-1">Sending native {displaySellSymbol} (you pay gas for this swap)</p>
               )}
-              <div className="flex gap-2 items-center">
+              <div className="flex items-center gap-2 rounded-full bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] px-4 py-3 min-h-[3.25rem]">
                 <input
                   type="text"
                   inputMode="decimal"
@@ -615,7 +616,8 @@ export function Swap() {
                     setSellToken(e.target.value as `0x${string}`);
                     setQuote(null);
                   }}
-                  className="bg-slate-700 text-white rounded-lg px-3 py-2 text-sm font-medium border border-slate-500 min-w-[5rem] sm:min-w-[6rem] cursor-pointer focus:ring-2 focus:ring-sky-400 focus:border-sky-400"
+                  className="bg-transparent text-[var(--swap-green-bright)] font-medium text-sm min-w-[5rem] sm:min-w-[6rem] cursor-pointer focus:ring-0 border-0 py-1 pr-6 appearance-none bg-no-repeat bg-right"
+                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234ade80'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
                   aria-label="Select token to sell"
                 >
                   {tokens.map((t) => (
@@ -628,11 +630,11 @@ export function Swap() {
             </div>
 
             {/* Flip button */}
-            <div className="flex justify-center -my-1">
+            <div className="flex justify-center -my-0.5">
               <button
                 type="button"
                 onClick={flipTokens}
-                className="p-2 rounded-full bg-sky-500/20 border-2 border-sky-400/50 text-sky-300 hover:bg-sky-500/40 hover:text-white transition"
+                className="p-2.5 rounded-full bg-[var(--swap-green)] text-white hover:bg-[var(--swap-green-bright)] shadow-[0_0_12px_var(--swap-green-glow)] transition"
                 aria-label="Swap from and to"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -641,17 +643,17 @@ export function Swap() {
               </button>
             </div>
 
-            {/* To row: amount + token dropdown */}
-            <div className="rounded-xl bg-slate-800/50 p-3 sm:p-4 border border-slate-600/80">
-              <label className="text-xs font-medium text-white block mb-2">To</label>
+            {/* To row: pill = amount + token */}
+            <div>
+              <label className="text-xs font-medium text-slate-400 block mb-1.5 ml-1">To</label>
               {isBuyingNative && (
-                <p className="text-xs text-sky-300 mb-1">Receiving real native {NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH"}</p>
+                <p className="text-xs text-[var(--swap-green-bright)] mb-1 ml-1">Receiving real native {NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH"}</p>
               )}
               {buyToken === WRAPPED_NATIVE[supportedChainId] && (
-                <p className="text-xs text-slate-300 mb-1">Receiving {tokens.find((t) => t.address === buyToken)?.symbol ?? "WETH"} (wrapped), not native</p>
+                <p className="text-xs text-slate-300 mb-1 ml-1">Receiving {tokens.find((t) => t.address === buyToken)?.symbol ?? "WETH"} (wrapped), not native</p>
               )}
-              <div className="flex gap-2 items-center">
-                <span className="flex-1 min-w-0 text-white text-lg font-medium truncate">
+              <div className="flex items-center gap-2 rounded-full bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] px-4 py-3 min-h-[3.25rem]">
+                <span className="flex-1 min-w-0 text-[var(--swap-green-bright)] text-lg font-medium truncate">
                   {(quote || swapQuote)
                     ? formatUnits(
                         BigInt((quote ?? swapQuote)!.buyAmount),
@@ -666,7 +668,8 @@ export function Swap() {
                     setQuote(null);
                     setSwapQuote(null);
                   }}
-                  className="bg-slate-700 text-white rounded-lg px-3 py-2 text-sm font-medium border border-slate-500 min-w-[5rem] sm:min-w-[6rem] cursor-pointer focus:ring-2 focus:ring-sky-400 focus:border-sky-400"
+                  className="bg-transparent text-[var(--swap-green-bright)] font-medium text-sm min-w-[5rem] sm:min-w-[6rem] cursor-pointer focus:ring-0 border-0 py-1 pr-6 appearance-none bg-no-repeat bg-right"
+                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%234ade80'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
                   aria-label="Select token to receive"
                 >
                   {buyTokenOptions.map((t) => (
@@ -677,7 +680,7 @@ export function Swap() {
                 </select>
               </div>
               {(quote?.fees?.integratorFee || swapQuote?.fees?.integratorFee) && (
-                <p className="text-xs text-slate-200 mt-2">
+                <p className="text-xs text-slate-200 mt-2 ml-1">
                   Fee (0.1%): {quote?.fees?.integratorFee
                     ? (() => {
                         const feeTokenAddr = quote.fees.integratorFee.token;
@@ -696,7 +699,7 @@ export function Swap() {
                 </p>
               )}
               {receiveUsd != null && receiveUsd > 0 && (
-                <p className="text-sm text-sky-300 font-medium mt-2">
+                <p className="text-sm text-[var(--swap-green-bright)] font-medium mt-2 ml-1">
                   ≈ ${receiveUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
                 </p>
               )}
@@ -716,7 +719,7 @@ export function Swap() {
                 <button
                   onClick={fetchQuote}
                   disabled={!sellAmount || amountNum <= 0 || quoteLoading || isBelowMin}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-400 hover:from-sky-400 hover:to-cyan-300 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold uppercase tracking-wide transition shadow-[0_0_20px_rgba(14,165,233,0.3)]"
+                  className="w-full py-3.5 rounded-full bg-[var(--swap-green)] hover:bg-[var(--swap-green-bright)] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold uppercase tracking-wide transition shadow-[0_0_20px_var(--swap-green-glow)]"
                 >
                   {quoteLoading ? "Getting quote..." : "Get Quote"}
                 </button>
@@ -754,7 +757,7 @@ export function Swap() {
                     {!(swapQuote && !isSellingNative) && (
                       <button
                         onClick={executeSwap}
-                        className="w-full py-3.5 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-400 hover:from-sky-400 hover:to-cyan-300 text-white font-semibold uppercase tracking-wide transition shadow-[0_0_20px_rgba(14,165,233,0.3)]"
+                        className="w-full py-3.5 rounded-full bg-[var(--swap-green)] hover:bg-[var(--swap-green-bright)] text-white font-semibold uppercase tracking-wide transition shadow-[0_0_20px_var(--swap-green-glow)]"
                       >
                         {swapQuote ? "Sign & Swap (you pay gas)" : "Sign & Swap (No Gas!)"}
                       </button>

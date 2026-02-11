@@ -13,4 +13,10 @@
   --delta-text-muted: #cbd5e1;
   --delta-bg: #0f172a;
   --delta-glow: rgba(14, 165, 233, 0.2);
+  /* Neon green swap UI */
+  --swap-green: #22c55d;
+  --swap-green-bright: #4ade80;
+  --swap-green-glow: rgba(34, 197, 94, 0.35);
+  --swap-pill-bg: rgba(30, 41, 59, 0.9);
+  --swap-pill-border: rgba(34, 197, 94, 0.4);
 }
