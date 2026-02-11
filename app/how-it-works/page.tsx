@@ -35,6 +35,14 @@ const CHAIN_TOKENS: Record<number, { symbol: string; name: string }[]> = {
   ],
 };
 
+const NATIVE_BY_CHAIN: Record<number, string> = {
+  8453: "ETH (native)",
+  42161: "ETH (native)",
+  137: "MATIC (native)",
+  56: "BNB (native)",
+  1: "ETH (native)",
+};
+
 export default function HowItWorksPage() {
   return (
     <main className="min-h-screen px-4 py-8 sm:px-6 sm:py-10">
@@ -54,19 +62,19 @@ export default function HowItWorksPage() {
             <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 sm:p-5">
               <h3 className="font-medium text-white mb-2">Gasless (no gas)</h3>
               <p className="text-sm leading-relaxed mb-2 text-slate-200">
-                When you <strong>sell a token</strong> (e.g. USDC, USDT, WETH, WBNB, WMATIC), you only sign a message. We submit the transaction and pay gas. You receive the buy token in your wallet with no extra step.
+                When you <strong>sell a token</strong> (e.g. USDC, USDT, WETH, WBNB, WMATIC) and receive another token or wrapped native, you only sign a message. We submit the transaction and pay gas. No tx from you.
               </p>
               <p className="text-xs text-slate-300">
-                Pairs: stable ↔ wrapped native, or stable ↔ stable on the same chain. You can also choose to receive <strong>real native</strong> (ETH, BNB, MATIC) via the “To” dropdown — select “ETH (native)” (or BNB/MATIC native) to get chain currency in your wallet.
+                Pairs: any token ↔ token on the same chain (e.g. USDC ↔ WETH, USDT ↔ WBNB). You can also choose to <strong>receive real native</strong> (ETH, BNB, MATIC) in the “To” dropdown — that path uses one tx (you pay gas once) to approve and swap.
               </p>
             </div>
             <div className="rounded-xl bg-slate-800/60 border border-amber-500/20 p-4 sm:p-5">
               <h3 className="font-medium text-white mb-2">Requires gas (you pay)</h3>
               <p className="text-sm leading-relaxed mb-2 text-slate-200">
-                When you <strong>sell native</strong> ETH, BNB, or MATIC, you send one transaction from your wallet. You pay gas for that transaction. This is the only way to swap native chain currency on our app.
+                When you <strong>sell native</strong> ETH, BNB, or MATIC (choose the chain’s native token in “From”), you send one transaction from your wallet and pay gas. You receive USDC, USDT, or wrapped.
               </p>
               <p className="text-xs text-slate-300">
-                Pairs: native ETH/BNB/MATIC → USDC, USDT, or wrapped. Fee is taken in the token you’re <strong>receiving</strong> (e.g. USDT when you sell BNB).
+                Pairs: native ETH/BNB/MATIC → USDC, USDT, or wrapped. Fee is taken in the token you’re <strong>receiving</strong>. On the swap screen, use the <strong>“Requires gas”</strong> tab to default to selling native.
               </p>
             </div>
           </div>
@@ -122,14 +130,15 @@ export default function HowItWorksPage() {
             Available pairs by chain
           </h2>
           <p className="text-slate-200 text-sm mb-4">
-            Same-chain swaps only. Supported tokens per network:
+            Same-chain swaps only. You can swap between any listed tokens and optionally <strong>receive real native</strong> (ETH, BNB, MATIC) via the “To” dropdown.
           </p>
           <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 overflow-hidden">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-700/50 bg-slate-800/80">
                   <th className="text-left py-3 px-4 font-medium text-white">Chain</th>
-                  <th className="text-left py-3 px-4 font-medium text-white">Tokens</th>
+                  <th className="text-left py-3 px-4 font-medium text-white">Tokens (from/to)</th>
+                  <th className="text-left py-3 px-4 font-medium text-white">Receive as native</th>
                 </tr>
               </thead>
               <tbody className="text-slate-200">
@@ -142,13 +151,16 @@ export default function HowItWorksPage() {
                     <td className="py-3 px-4">
                       {(CHAIN_TOKENS[chain.id] ?? []).map((t) => t.symbol).join(", ")}
                     </td>
+                    <td className="py-3 px-4 text-sky-300">
+                      {NATIVE_BY_CHAIN[chain.id] ?? "—"}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
           <p className="text-xs text-slate-400 mt-3">
-            Any pair between these tokens on the same chain is supported. BNB has no USDC (USDT + WBNB only).
+            Any pair between these tokens on the same chain is supported. BNB has no USDC (USDT + WBNB only). Use “Gasless” for token ↔ token (sign only); use “Requires gas” when selling native or when receiving real native (one tx, you pay gas).
           </p>
         </section>
 
@@ -158,10 +170,10 @@ export default function HowItWorksPage() {
           </h2>
           <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 sm:p-5 text-sm text-slate-200 space-y-2">
             <p>
-              <strong className="text-white">Gasless:</strong> Sell USDC, USDT, WETH, WBNB, or WMATIC → you sign, we pay gas. You receive the buy token (stables or wrapped).
+              <strong className="text-white">Gasless:</strong> Sell a token (USDC, USDT, WETH, WBNB, WMATIC) and receive another token or wrapped → you only sign, we pay gas. If you choose to <strong>receive real native</strong> (ETH/BNB/MATIC), you pay gas for one approve+swap tx.
             </p>
             <p>
-              <strong className="text-amber-300/90">Requires gas:</strong> Sell native ETH, BNB, or MATIC → you send one tx and pay gas. You receive stables or wrapped.
+              <strong className="text-amber-300/90">Requires gas:</strong> Sell native ETH, BNB, or MATIC → you send one tx and pay gas. You receive stables or wrapped. On the swap screen, the <strong>“Gasless”</strong> and <strong>“Requires gas”</strong> tabs make this split clear.
             </p>
           </div>
         </section>

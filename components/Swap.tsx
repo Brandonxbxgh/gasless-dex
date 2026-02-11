@@ -134,6 +134,7 @@ export function Swap() {
   const { data: walletClient } = useWalletClient();
   const { disconnect } = useDisconnect();
 
+  const [swapMode, setSwapMode] = useState<"gasless" | "requires_gas">("gasless");
   const [sellToken, setSellToken] = useState<`0x${string}`>(
     () => getDefaultSellToken(supportedChainId)
   );
@@ -141,11 +142,16 @@ export function Swap() {
     () => WRAPPED_NATIVE[supportedChainId] || TOKEN_OPTIONS[8453][1].address
   );
   useEffect(() => {
-    setSellToken(getDefaultSellToken(supportedChainId));
-    setBuyToken(WRAPPED_NATIVE[supportedChainId] || TOKEN_OPTIONS[8453][1].address);
+    if (swapMode === "gasless") {
+      setSellToken(getDefaultSellToken(supportedChainId));
+      setBuyToken(WRAPPED_NATIVE[supportedChainId] || TOKEN_OPTIONS[8453][1].address);
+    } else {
+      setSellToken(WRAPPED_NATIVE[supportedChainId]!);
+      setBuyToken(getDefaultSellToken(supportedChainId));
+    }
     setQuote(null);
     setSwapQuote(null);
-  }, [supportedChainId]);
+  }, [supportedChainId, swapMode]);
 
   // Refresh state when wallet connects or chain changes (fixes WalletConnect not updating)
   useEffect(() => {
@@ -583,6 +589,51 @@ export function Swap() {
             </div>
           </div>
 
+          {/* Gasless vs Requires gas tabs */}
+          <div className="mb-4">
+            <div className="flex rounded-xl bg-slate-800/60 border border-slate-600/80 p-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setSwapMode("gasless");
+                  setSellToken(getDefaultSellToken(supportedChainId));
+                  setBuyToken(WRAPPED_NATIVE[supportedChainId] || TOKEN_OPTIONS[8453][1].address);
+                  setQuote(null);
+                  setSwapQuote(null);
+                }}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition ${
+                  swapMode === "gasless"
+                    ? "bg-sky-500/30 text-white border border-sky-400/50 shadow-[0_0_12px_rgba(14,165,233,0.2)]"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                Gasless
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSwapMode("requires_gas");
+                  setSellToken(WRAPPED_NATIVE[supportedChainId]!);
+                  setBuyToken(getDefaultSellToken(supportedChainId));
+                  setQuote(null);
+                  setSwapQuote(null);
+                }}
+                className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition ${
+                  swapMode === "requires_gas"
+                    ? "bg-amber-500/20 text-amber-200 border border-amber-400/50"
+                    : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                Requires gas
+              </button>
+            </div>
+            <p className="text-xs text-slate-400 mt-2 text-center">
+              {swapMode === "gasless"
+                ? "Token ↔ token — you only sign, no gas. You can also receive real native (ETH/BNB/MATIC) in To."
+                : `Selling native ${NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH"} — you pay gas for one tx.`}
+            </p>
+          </div>
+
           <div className="space-y-3">
             {/* From row: amount + token dropdown */}
             <div className="rounded-xl bg-slate-800/50 p-3 sm:p-4 border border-slate-600/80">
@@ -605,7 +656,9 @@ export function Swap() {
                 <select
                   value={sellToken}
                   onChange={(e) => {
-                    setSellToken(e.target.value as `0x${string}`);
+                    const next = e.target.value as `0x${string}`;
+                    setSellToken(next);
+                    setSwapMode(next === WRAPPED_NATIVE[supportedChainId] ? "requires_gas" : "gasless");
                     setQuote(null);
                   }}
                   className="bg-slate-700 text-white rounded-lg px-3 py-2 text-sm font-medium border border-slate-500 min-w-[5rem] sm:min-w-[6rem] cursor-pointer focus:ring-2 focus:ring-sky-400 focus:border-sky-400"
