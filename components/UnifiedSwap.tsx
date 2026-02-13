@@ -12,6 +12,7 @@ import {
   NATIVE_TOKEN_ADDRESS,
   type GaslessQuoteResponse,
   type SwapQuoteResponse,
+  type SignedApprovalData,
 } from "@/lib/api";
 import { splitSignature, SignatureType } from "@/lib/signature";
 import { WRAPPED_NATIVE, type SupportedChainId } from "@/lib/chains";
@@ -252,8 +253,6 @@ export function UnifiedSwap() {
     }
   }, [address, amount, inputToken, outputToken, fromChainId, toChainId, isSameChain, isInputNative, isOutputNative]);
 
-  type ApprovalPayload = { type: string; eip712: object; signature: { r: string; s: string; v: number; signatureType: number } };
-
   const executeSameChain = useCallback(async () => {
     if (!walletClient || !address) return;
     setSwapping(true);
@@ -318,7 +317,7 @@ export function UnifiedSwap() {
       } else if (quote) {
         const tokenApprovalRequired = quote.issues?.allowance != null;
         const gaslessApprovalAvailable = quote.approval != null;
-        let approvalData: ApprovalPayload | null = null;
+        let approvalData: SignedApprovalData | null = null;
         if (tokenApprovalRequired && gaslessApprovalAvailable && quote.approval) {
           const sig = await walletClient.signTypedData({
             account: address,
