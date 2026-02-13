@@ -15,8 +15,9 @@ import {
   type SignedApprovalData,
 } from "@/lib/api";
 import { splitSignature, SignatureType } from "@/lib/signature";
-import { WRAPPED_NATIVE, type SupportedChainId } from "@/lib/chains";
 import { addToHistory } from "@/lib/history";
+
+export type SwapTabId = "swap" | "wrap" | "bridge";
 
 const ERC20_APPROVE_ABI = [
   { inputs: [{ name: "spender", type: "address" }, { name: "amount", type: "uint256" }], name: "approve", outputs: [{ type: "bool" }], stateMutability: "nonpayable", type: "function" },
@@ -146,16 +147,79 @@ export function UnifiedSwap() {
   const [inputTokenPriceUsd, setInputTokenPriceUsd] = useState<number | null>(null);
   const [outputTokenPriceUsd, setOutputTokenPriceUsd] = useState<number | null>(null);
   const [nativeTokenPriceUsd, setNativeTokenPriceUsd] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState<SwapTabId>("swap");
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const setTab = useCallback((tab: SwapTabId) => {
+    setActiveTab(tab);
+    setMobileMenuOpen(false);
+    setQuote(null);
+    setSwapQuote(null);
+    setAcrossQuote(null);
+    setQuoteReceivedAt(null);
+    setError(null);
+    setShowSignConfirm(false);
+    if (tab === "swap") {
+      setToChainId((prev) => (prev !== fromChainId ? fromChainId : prev));
+    } else if (tab === "wrap") {
+      setToChainId(fromChainId);
+      const tokens = TOKENS_BY_CHAIN[fromChainId] ?? TOKENS_BY_CHAIN[8453];
+      const native = tokens.find((t) => t.isNative) ?? tokens[0];
+      const wrapped = tokens.find((t) => t.symbol.startsWith("W")) ?? tokens[1];
+      setInputToken(native);
+      setOutputToken(wrapped);
+    } else if (tab === "bridge") {
+      if (fromChainId === toChainId) {
+        const other = CHAINS.find((c) => c.id !== fromChainId);
+        if (other) setToChainId(other.id);
+      }
+    }
+  }, [fromChainId]);
+
+  useEffect(() => {
+    if (activeTab === "swap" || activeTab === "wrap") setToChainId((prev) => (prev !== fromChainId ? fromChainId : prev));
+  }, [activeTab, fromChainId]);
+
+  useEffect(() => {
+    if (activeTab === "bridge" && fromChainId === toChainId) {
+      const other = CHAINS.find((c) => c.id !== fromChainId);
+      if (other) setToChainId(other.id);
+    }
+  }, [activeTab, fromChainId, toChainId]);
+
+  useEffect(() => {
+    if (activeTab === "wrap") {
+      const tokens = TOKENS_BY_CHAIN[fromChainId] ?? TOKENS_BY_CHAIN[8453];
+      const native = tokens.find((t) => t.isNative) ?? tokens[0];
+      const wrapped = tokens.find((t) => t.symbol.startsWith("W")) ?? tokens[1];
+      setInputToken((prev) => {
+        const inChain = (TOKENS_BY_CHAIN[fromChainId] ?? []).some((t) => t.address === prev.address);
+        return inChain ? prev : native;
+      });
+      setOutputToken((prev) => {
+        const outChain = (TOKENS_BY_CHAIN[fromChainId] ?? []).some((t) => t.address === prev.address);
+        return outChain ? prev : wrapped;
+      });
+    }
+  }, [activeTab, fromChainId]);
 
   const isSameChain = fromChainId === toChainId;
   const needsChainSwitch = isConnected && chainId !== fromChainId;
-  const inputTokens = TOKENS_BY_CHAIN[fromChainId] ?? TOKENS_BY_CHAIN[8453];
-  const outputTokens = TOKENS_BY_CHAIN[toChainId] ?? TOKENS_BY_CHAIN[8453];
+  const allInputTokens = TOKENS_BY_CHAIN[fromChainId] ?? TOKENS_BY_CHAIN[8453];
+  const allOutputTokens = TOKENS_BY_CHAIN[toChainId] ?? TOKENS_BY_CHAIN[8453];
+  const wrapTokens = useMemo(() => {
+    const t = TOKENS_BY_CHAIN[fromChainId] ?? TOKENS_BY_CHAIN[8453];
+    return t.filter((x) => x.isNative || x.symbol.startsWith("W"));
+  }, [fromChainId]);
+  const inputTokens = activeTab === "wrap" ? wrapTokens : allInputTokens;
+  const outputTokens = activeTab === "wrap" ? wrapTokens : allOutputTokens;
 
   const isInputNative = inputToken.address === NATIVE_TOKEN;
   const isOutputNative = outputToken.address === NATIVE_TOKEN;
   const isWrap = isSameChain && isInputNative && !isOutputNative && outputToken.symbol.startsWith("W");
   const isUnwrap = isSameChain && !isInputNative && inputToken.symbol.startsWith("W") && isOutputNative;
+  const effectiveIsWrap = activeTab === "wrap" && isWrap;
+  const effectiveIsUnwrap = activeTab === "wrap" && isUnwrap;
 
   const inputPriceAddr = isInputNative ? WRAPPED_BY_CHAIN[fromChainId] : inputToken.address;
   const outputPriceAddr = isOutputNative ? WRAPPED_BY_CHAIN[toChainId] : outputToken.address;
@@ -221,6 +285,7 @@ export function UnifiedSwap() {
   }, [isOutputNative, outputNativeBalance?.value, outputBalanceRaw, outputToken.decimals]);
 
 
+  const swapTabWithWrapSelection = activeTab === "swap" && (isWrap || isUnwrap);
   const outputAmount = useMemo(() => {
     if (isWrap || isUnwrap) return amount || "0";
     if (acrossQuote?.expectedOutputAmount) {
@@ -238,7 +303,7 @@ export function UnifiedSwap() {
   }, [outputAmount, outputTokenPriceUsd]);
 
   const hasQuote = !!(quote || swapQuote || acrossQuote);
-  const canExecute = hasQuote || isWrap || isUnwrap;
+  const canExecute = hasQuote || effectiveIsWrap || effectiveIsUnwrap;
 
   const resetForNextAction = useCallback(() => {
     setTxHash(null);
@@ -355,7 +420,7 @@ export function UnifiedSwap() {
   const fetchQuoteRef = useRef(fetchQuote);
   fetchQuoteRef.current = fetchQuote;
   useEffect(() => {
-    if (!hasQuote || isWrap || isUnwrap) {
+    if (!hasQuote || effectiveIsWrap || effectiveIsUnwrap) {
       if (quoteRefreshRef.current) {
         clearInterval(quoteRefreshRef.current);
         quoteRefreshRef.current = null;
@@ -368,10 +433,10 @@ export function UnifiedSwap() {
     return () => {
       if (quoteRefreshRef.current) clearInterval(quoteRefreshRef.current);
     };
-  }, [hasQuote, isWrap, isUnwrap]);
+  }, [hasQuote, effectiveIsWrap, effectiveIsUnwrap]);
 
   useEffect(() => {
-    if (!quoteReceivedAt || !hasQuote || isWrap || isUnwrap) {
+    if (!quoteReceivedAt || !hasQuote || effectiveIsWrap || effectiveIsUnwrap) {
       setQuoteCountdown(null);
       return;
     }
@@ -385,7 +450,7 @@ export function UnifiedSwap() {
     update();
     const id = setInterval(update, 1000);
     return () => clearInterval(id);
-  }, [quoteReceivedAt, hasQuote, isWrap, isUnwrap]);
+  }, [quoteReceivedAt, hasQuote, effectiveIsWrap, effectiveIsUnwrap]);
 
   useEffect(() => {
     if (!acrossQuote || !address || chainId !== fromChainId) {
@@ -422,7 +487,7 @@ export function UnifiedSwap() {
     setError(null);
 
     try {
-      if (isWrap) {
+      if (effectiveIsWrap) {
         const amountWei = parseUnits(amount, 18);
         const wrappedAddr = WRAPPED_BY_CHAIN[fromChainId] as `0x${string}`;
         const hash = await walletClient.writeContract({
@@ -447,7 +512,7 @@ export function UnifiedSwap() {
         setAmount("");
         setQuote(null);
         setSwapQuote(null);
-      } else if (isUnwrap) {
+      } else if (effectiveIsUnwrap) {
         const amountWei = parseUnits(amount, 18);
         const wrappedAddr = WRAPPED_BY_CHAIN[fromChainId] as `0x${string}`;
         const hash = await walletClient.writeContract({
@@ -581,7 +646,7 @@ export function UnifiedSwap() {
     } finally {
       setSwapping(false);
     }
-  }, [walletClient, address, publicClient, isWrap, isUnwrap, amount, inputToken, outputToken, fromChainId, swapQuote, quote, isInputNative, isOutputNative]);
+  }, [walletClient, address, publicClient, effectiveIsWrap, effectiveIsUnwrap, amount, inputToken, outputToken, fromChainId, swapQuote, quote, isInputNative, isOutputNative]);
 
   const executeCrossChain = useCallback(async () => {
     if (!acrossQuote || !walletClient || !address) return;
@@ -786,21 +851,106 @@ export function UnifiedSwap() {
   const isGetQuoteDisabled = useMemo(() => {
     if (!amount || parseFloat(amount) <= 0) return true;
     if (loading || swapping) return true;
-    if (isWrap || isUnwrap) return true;
+    if (effectiveIsWrap || effectiveIsUnwrap) return true;
+    if (swapTabWithWrapSelection) return true;
+    if (activeTab === "bridge" && isSameChain) return true;
     return false;
-  }, [amount, loading, swapping, isWrap, isUnwrap]);
+  }, [amount, loading, swapping, effectiveIsWrap, effectiveIsUnwrap, swapTabWithWrapSelection, activeTab, isSameChain]);
 
   const isSwapDisabled = useMemo(() => {
-    if (!hasQuote || isWrap || isUnwrap) return true;
+    if (!hasQuote || effectiveIsWrap || effectiveIsUnwrap) return true;
     if (loading || swapping) return true;
     if (needsChainSwitch) return true;
     return false;
-  }, [hasQuote, isWrap, isUnwrap, loading, swapping, needsChainSwitch]);
+  }, [hasQuote, effectiveIsWrap, effectiveIsUnwrap, loading, swapping, needsChainSwitch]);
+
+  const TAB_LABELS: { id: SwapTabId; label: string }[] = [
+    { id: "swap", label: "Swap" },
+    { id: "wrap", label: "Wrap" },
+    { id: "bridge", label: "Bridge" },
+  ];
 
   return (
-    <div className="w-full max-w-md mx-auto rounded-3xl border p-6 sm:p-8 bg-[var(--delta-card)] border-[var(--swap-pill-border)] shadow-xl">
-      <h1 className="text-2xl sm:text-3xl font-bold text-center text-white mb-1">Swap</h1>
-      <p className="text-center text-[var(--delta-text-muted)] text-sm mb-6">Swap, wrap, unwrap, or bridge across chains</p>
+    <div className="w-full max-w-md mx-auto rounded-3xl border p-6 sm:p-8 bg-[var(--delta-card)] border-[var(--swap-pill-border)] shadow-xl relative overflow-hidden">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl sm:text-3xl font-bold text-white">Swap</h1>
+          <span className="md:hidden text-sm font-medium text-[var(--swap-accent)] bg-[var(--swap-accent)]/20 px-2.5 py-1 rounded-lg">
+            {TAB_LABELS.find((t) => t.id === activeTab)?.label ?? activeTab}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() => setMobileMenuOpen((o) => !o)}
+          className="md:hidden p-2 -mr-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-colors"
+          aria-label="Open menu"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      </div>
+
+      <div className="hidden md:flex rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] p-1 mb-4">
+        {TAB_LABELS.map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setTab(id)}
+            className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === id ? "bg-[var(--swap-accent)] text-white" : "text-[var(--delta-text-muted)] hover:text-white"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div
+        className={`fixed inset-0 z-50 md:hidden transition-opacity duration-200 ${
+          mobileMenuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        }`}
+        aria-hidden={!mobileMenuOpen}
+      >
+        <div
+          className="absolute inset-0 bg-black/60"
+          onClick={() => setMobileMenuOpen(false)}
+          aria-hidden
+        />
+        <div
+          className={`absolute right-0 top-0 bottom-0 w-64 max-w-[85vw] bg-[var(--delta-card)] border-l border-[var(--swap-pill-border)] shadow-2xl flex flex-col transition-transform duration-200 ${
+            mobileMenuOpen ? "translate-x-0" : "translate-x-full"
+          }`}
+        >
+          <div className="flex items-center justify-between p-4 border-b border-[var(--swap-pill-border)]">
+            <span className="text-white font-semibold">Select action</span>
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(false)}
+              className="p-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10"
+              aria-label="Close menu"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <nav className="p-4 flex flex-col gap-1">
+            {TAB_LABELS.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                className={`w-full text-left py-3 px-4 rounded-xl text-base font-medium transition-colors ${
+                  activeTab === id ? "bg-[var(--swap-accent)] text-white" : "text-[var(--delta-text-muted)] hover:bg-white/5 hover:text-white"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+        </div>
+      </div>
 
       {!isConnected ? (
         <div className="py-12 flex flex-col items-center gap-5">
@@ -881,20 +1031,27 @@ export function UnifiedSwap() {
           </div>
 
           <div>
-            <p className="text-xs text-[var(--delta-text-muted)] mb-2">To</p>
+            <p className="text-xs text-[var(--delta-text-muted)] mb-2">To {activeTab !== "bridge" && "(same chain)"}</p>
             <select
               value={toChainId}
               onChange={(e) => {
-                const id = Number(e.target.value);
-                setToChainId(id);
-                setOutputToken(TOKENS_BY_CHAIN[id]?.[0] ?? outputTokens[0]);
-                setQuote(null);
-                setSwapQuote(null);
-                setAcrossQuote(null);
-                setQuoteReceivedAt(null);
-                setShowSignConfirm(false);
+                if (activeTab === "bridge") {
+                  const id = Number(e.target.value);
+                  setToChainId(id);
+                  setOutputToken(TOKENS_BY_CHAIN[id]?.[0] ?? outputTokens[0]);
+                  setQuote(null);
+                  setSwapQuote(null);
+                  setAcrossQuote(null);
+                  setQuoteReceivedAt(null);
+                  setShowSignConfirm(false);
+                }
               }}
-              className="w-full rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] text-white text-sm px-3 py-2 mb-2"
+              disabled={activeTab !== "bridge"}
+              className={`w-full rounded-xl border text-white text-sm px-3 py-2 mb-2 ${
+                activeTab === "bridge"
+                  ? "bg-[var(--swap-pill-bg)] border-[var(--swap-pill-border)]"
+                  : "bg-[var(--swap-pill-bg)]/60 border-[var(--swap-pill-border)]/60 cursor-not-allowed opacity-80"
+              }`}
             >
               {CHAINS.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
@@ -977,7 +1134,10 @@ export function UnifiedSwap() {
               </>
             ) : (
               <>
-            {!(isWrap || isUnwrap) && (
+            {swapTabWithWrapSelection && (
+              <p className="text-amber-400/90 text-sm text-center py-2">Use the Wrap tab for native ↔ wrapped</p>
+            )}
+            {!(effectiveIsWrap || effectiveIsUnwrap) && (
               <button
                 onClick={fetchQuote}
                 disabled={isGetQuoteDisabled}
@@ -987,17 +1147,17 @@ export function UnifiedSwap() {
               </button>
             )}
 
-            {(isWrap || isUnwrap) && (
+            {(effectiveIsWrap || effectiveIsUnwrap) && (
               <button
                 onClick={execute}
                 disabled={!amount || parseFloat(amount) <= 0 || swapping || needsChainSwitch}
                 className="w-full py-4 rounded-2xl bg-[#2d2d3d] hover:bg-[#3d3d4d] disabled:opacity-50 disabled:cursor-not-allowed text-[var(--swap-accent)] font-semibold text-base"
               >
-                {swapping ? "Swapping..." : isWrap ? "Wrap" : "Unwrap"}
+                {swapping ? "Swapping..." : effectiveIsWrap ? "Wrap" : "Unwrap"}
               </button>
             )}
 
-            {hasQuote && quoteBreakdown && !isWrap && !isUnwrap && (
+            {hasQuote && quoteBreakdown && !effectiveIsWrap && !effectiveIsUnwrap && (
               <div className="rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] p-4 space-y-2">
                 <div className="flex items-center justify-between">
                   <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">Quote breakdown</p>
@@ -1087,7 +1247,7 @@ export function UnifiedSwap() {
                 </div>
               </div>
             )}
-            {hasQuote && !isWrap && !isUnwrap && !showSignConfirm && (
+            {hasQuote && !effectiveIsWrap && !effectiveIsUnwrap && !showSignConfirm && (
               <button
                 onClick={execute}
                 disabled={isSwapDisabled}
