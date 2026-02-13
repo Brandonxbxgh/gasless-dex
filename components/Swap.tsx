@@ -75,10 +75,6 @@ function getPreferredFeeToken(
 /** 0x Allowance Holder (same on BNB, Ethereum, Base, etc.) - used when 0x doesn't return issues.allowance */
 const ALLOWANCE_HOLDER = "0x0000000000001fF3684f28c67538d4D072C22734" as const;
 
-/** wTXC only has USDC pair on Ethereum - restrict counterparty when wTXC is selected */
-const WTXC_ETH = "0x9FC65df3997073B8551Ffd617154B5102fACbb88" as `0x${string}`;
-const USDC_ETH = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as `0x${string}`;
-
 function truncateAddress(addr: string) {
   if (!addr || addr.length < 10) return addr;
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
@@ -91,7 +87,6 @@ const TOKEN_DECIMALS: Record<string, number> = {
   WETH: 18,
   WBNB: 18,
   WMATIC: 18,
-  wTXC: 18,
   ETH: 18,
   MATIC: 18,
   BNB: 18,
@@ -128,7 +123,6 @@ const TOKEN_OPTIONS: Record<SupportedChainId, { address: `0x${string}`; symbol: 
     { address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as `0x${string}`, symbol: "USDC" },
     { address: "0xdAC17F958D2ee523a2206206994597C13D831ec7" as `0x${string}`, symbol: "USDT" },
     { address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as `0x${string}`, symbol: "WETH" },
-    { address: "0x9FC65df3997073B8551Ffd617154B5102fACbb88" as `0x${string}`, symbol: "wTXC" },
   ],
 };
 
@@ -139,7 +133,6 @@ const MIN_SELL_AMOUNT: Record<string, number> = {
   WETH: 0.001,
   WBNB: 0.001,
   WMATIC: 0.001,
-  wTXC: 0.001,
   ETH: 0.001,
   MATIC: 0.001,
   BNB: 0.001,
@@ -168,20 +161,6 @@ export function Swap() {
     setQuote(null);
     setSwapQuote(null);
   }, [supportedChainId]);
-
-  useEffect(() => {
-    if (supportedChainId !== 1) return;
-    if (sellToken === WTXC_ETH && buyToken !== USDC_ETH) {
-      setBuyToken(USDC_ETH);
-      setQuote(null);
-      setSwapQuote(null);
-    }
-    if (buyToken === WTXC_ETH && sellToken !== USDC_ETH) {
-      setSellToken(USDC_ETH);
-      setQuote(null);
-      setSwapQuote(null);
-    }
-  }, [supportedChainId, sellToken, buyToken]);
 
   // Refresh state when wallet connects or chain changes (fixes WalletConnect not updating)
   useEffect(() => {
@@ -270,23 +249,12 @@ export function Swap() {
     setSwapQuote(null);
   }, [sellBalanceFormatted]);
 
-  const buyTokenOptions = useMemo(() => {
-    const base = [
-      ...tokens,
-      { address: NATIVE_TOKEN_ADDRESS as `0x${string}`, symbol: NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH", isNative: true as const },
-    ];
-    if (supportedChainId === 1 && sellToken === WTXC_ETH) {
-      return base.filter((t) => t.address === USDC_ETH);
-    }
-    return base;
-  }, [tokens, supportedChainId, sellToken]);
+  const buyTokenOptions = useMemo(() => [
+    ...tokens,
+    { address: NATIVE_TOKEN_ADDRESS as `0x${string}`, symbol: NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH", isNative: true as const },
+  ], [tokens, supportedChainId]);
 
-  const sellTokenOptions = useMemo(() => {
-    if (supportedChainId === 1 && buyToken === WTXC_ETH) {
-      return tokens.filter((t) => t.address === USDC_ETH);
-    }
-    return tokens;
-  }, [tokens, supportedChainId, buyToken]);
+  const sellTokenOptions = tokens;
 
   const [sellTokenPriceUsd, setSellTokenPriceUsd] = useState<number | null>(null);
   useEffect(() => {
@@ -372,8 +340,8 @@ export function Swap() {
       const decimals = getTokenDecimals(sellSymbolForLogic, supportedChainId);
       const amountWei = parseUnits(String(amountToUse), decimals).toString();
 
-      // Use Swap API for native ETH trades or wTXC (gasless API may not support wTXC)
-      const useSwapApi = isSellingNative || isBuyingNative || (supportedChainId === 1 && (sellToken === WTXC_ETH || buyToken === WTXC_ETH));
+      // Use Swap API for native ETH trades (gasless API may not support native)
+      const useSwapApi = isSellingNative || isBuyingNative;
       if (useSwapApi) {
         const res = await getSwapQuote({
           chainId: supportedChainId,
@@ -391,29 +359,6 @@ export function Swap() {
         if (res.liquidityAvailable && res.transaction) {
           const buyDecimals = isBuyingNative ? 18 : getTokenDecimals(tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH", supportedChainId);
           const buyAmountHuman = Number(formatUnits(BigInt(res.buyAmount), buyDecimals));
-          const isWtxcTrade = supportedChainId === 1 && (sellToken === WTXC_ETH || buyToken === WTXC_ETH);
-          if (isWtxcTrade) {
-            try {
-              const [sellPriceRes, buyPriceRes] = await Promise.all([
-                fetch(`/api/token-price?chainId=1&address=${encodeURIComponent(sellToken === WTXC_ETH ? WTXC_ETH : USDC_ETH)}`),
-                fetch(`/api/token-price?chainId=1&address=${encodeURIComponent(buyToken === WTXC_ETH ? WTXC_ETH : USDC_ETH)}`),
-              ]);
-              const sellPrice = (await sellPriceRes.json()) as { usd?: number | null };
-              const buyPrice = (await buyPriceRes.json()) as { usd?: number | null };
-              const sellUsd = amountToUse * (typeof sellPrice?.usd === "number" ? sellPrice.usd : 0);
-              const expectedBuyAmount = buyPrice?.usd && buyPrice.usd > 0 ? sellUsd / buyPrice.usd : 0;
-              const ratio = expectedBuyAmount > 0 ? buyAmountHuman / expectedBuyAmount : 1;
-              if (ratio < 0.2 || ratio > 5) {
-                setQuoteError("Quote seems incorrect for wTXC (~$0.30). Try Uniswap directly for wTXC/USDC.");
-                setQuote(null);
-                setSwapQuote(null);
-                setQuoteLoading(false);
-                return;
-              }
-            } catch {
-              /* continue with quote */
-            }
-          }
           setSwapQuote(res);
           try {
             const priceAddress = isBuyingNative ? WRAPPED_NATIVE[supportedChainId] : buyToken;
