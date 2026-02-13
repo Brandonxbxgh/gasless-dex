@@ -135,6 +135,8 @@ export interface SwapQuoteResponse {
     value: string;
     gas?: string;
     gasPrice?: string;
+    maxFeePerGas?: string;
+    maxPriorityFeePerGas?: string;
   };
   fees?: {
     integratorFee?: { amount: string; token: string; type: string };

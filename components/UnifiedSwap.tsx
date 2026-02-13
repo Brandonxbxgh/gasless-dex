@@ -142,6 +142,7 @@ export function UnifiedSwap() {
   const [approvingInProgress, setApprovingInProgress] = useState(false);
   const [inputTokenPriceUsd, setInputTokenPriceUsd] = useState<number | null>(null);
   const [outputTokenPriceUsd, setOutputTokenPriceUsd] = useState<number | null>(null);
+  const [nativeTokenPriceUsd, setNativeTokenPriceUsd] = useState<number | null>(null);
 
   const isSameChain = fromChainId === toChainId;
   const needsChainSwitch = isConnected && chainId !== fromChainId;
@@ -171,6 +172,15 @@ export function UnifiedSwap() {
       .then((d: { usd?: number | null }) => setOutputTokenPriceUsd(typeof d?.usd === "number" ? d.usd : null))
       .catch(() => setOutputTokenPriceUsd(null));
   }, [toChainId, outputPriceAddr]);
+
+  const nativePriceAddr = WRAPPED_BY_CHAIN[fromChainId];
+  useEffect(() => {
+    if (!nativePriceAddr) return;
+    fetch(`/api/token-price?chainId=${fromChainId}&address=${encodeURIComponent(nativePriceAddr)}`)
+      .then((r) => r.json())
+      .then((d: { usd?: number | null }) => setNativeTokenPriceUsd(typeof d?.usd === "number" ? d.usd : null))
+      .catch(() => setNativeTokenPriceUsd(null));
+  }, [fromChainId, nativePriceAddr]);
 
   const inputUsdValue = useMemo(() => {
     if (!amount || parseFloat(amount) <= 0 || inputTokenPriceUsd == null) return null;
@@ -559,41 +569,91 @@ export function UnifiedSwap() {
   }, [isSameChain, executeSameChain, executeCrossChain]);
 
   const quoteBreakdown = useMemo(() => {
+    type FeeItem = { label: string; value: string; valueUsd?: string };
+    const toUsdStr = (amountWei: bigint, decimals: number, priceUsd: number | null) => {
+      if (priceUsd == null) return undefined;
+      const v = Number(amountWei) / 10 ** decimals * priceUsd;
+      return `$${v.toFixed(4)}`;
+    };
+
     if (swapQuote) {
       const sources = swapQuote.route?.fills?.map((f) => f.source).filter(Boolean) ?? [];
       const gasWei = swapQuote.transaction?.gas && swapQuote.transaction?.gasPrice
         ? BigInt(swapQuote.transaction.gas) * BigInt(swapQuote.transaction.gasPrice)
         : swapQuote.totalNetworkFee ? BigInt(swapQuote.totalNetworkFee) : null;
-      const feeItems: { label: string; value: string }[] = [];
+      const feeItems: FeeItem[] = [];
       if (swapQuote.fees?.integratorFee?.amount) {
         const dec = getTokenDecimals(outputToken.symbol, fromChainId);
-        feeItems.push({ label: "App fee (0.1%)", value: `${formatUnits(BigInt(swapQuote.fees.integratorFee.amount), dec)} ${outputToken.symbol}` });
+        const amt = BigInt(swapQuote.fees.integratorFee.amount);
+        feeItems.push({
+          label: "App fee (0.1%)",
+          value: `${formatUnits(amt, dec)} ${outputToken.symbol}`,
+          valueUsd: toUsdStr(amt, dec, outputTokenPriceUsd),
+        });
       }
       if (swapQuote.fees?.zeroExFee?.amount) {
         const dec = getTokenDecimals(outputToken.symbol, fromChainId);
-        feeItems.push({ label: "0x fee", value: `${formatUnits(BigInt(swapQuote.fees.zeroExFee.amount), dec)} ${outputToken.symbol}` });
+        const amt = BigInt(swapQuote.fees.zeroExFee.amount);
+        feeItems.push({
+          label: "0x fee",
+          value: `${formatUnits(amt, dec)} ${outputToken.symbol}`,
+          valueUsd: toUsdStr(amt, dec, outputTokenPriceUsd),
+        });
       }
-      return { type: "swap" as const, sources, gasWei, feeItems };
+      if (swapQuote.fees?.gasFee?.amount) {
+        const dec = getTokenDecimals(outputToken.symbol, fromChainId);
+        const amt = BigInt(swapQuote.fees.gasFee.amount);
+        feeItems.push({
+          label: "Network fee",
+          value: `${formatUnits(amt, dec)} ${outputToken.symbol}`,
+          valueUsd: toUsdStr(amt, dec, outputTokenPriceUsd),
+        });
+      }
+      const gasUsd = gasWei != null && nativeTokenPriceUsd != null
+        ? `$${(Number(gasWei) / 1e18 * nativeTokenPriceUsd).toFixed(4)}`
+        : undefined;
+      const totalUsd = [...feeItems.map((f) => f.valueUsd?.replace(/[$,]/g, "")).filter(Boolean), gasUsd?.replace(/[$,]/g, "")].reduce((sum, s) => sum + parseFloat(s!), 0);
+      return { type: "swap" as const, sources, gasWei, gasUsd, feeItems, totalFeesUsd: totalUsd > 0 ? `$${totalUsd.toFixed(4)}` : undefined };
     }
     if (quote) {
       const fills = (quote.route?.fills ?? []) as { source?: string }[];
       const sources = fills.map((f) => f.source).filter(Boolean);
-      const feeItems: { label: string; value: string }[] = [];
+      const feeItems: FeeItem[] = [];
       if (quote.fees?.integratorFee?.amount) {
         const dec = getTokenDecimals(outputToken.symbol, fromChainId);
-        feeItems.push({ label: "App fee (0.1%)", value: `${formatUnits(BigInt(quote.fees.integratorFee.amount), dec)} ${outputToken.symbol}` });
+        const amt = BigInt(quote.fees.integratorFee.amount);
+        feeItems.push({
+          label: "App fee (0.1%)",
+          value: `${formatUnits(amt, dec)} ${outputToken.symbol}`,
+          valueUsd: toUsdStr(amt, dec, outputTokenPriceUsd),
+        });
       }
-      return { type: "gasless" as const, sources, gasWei: null, feeItems };
+      if (quote.fees?.zeroExFee?.amount) {
+        const dec = getTokenDecimals(outputToken.symbol, fromChainId);
+        const amt = BigInt(quote.fees.zeroExFee.amount);
+        feeItems.push({
+          label: "0x fee",
+          value: `${formatUnits(amt, dec)} ${outputToken.symbol}`,
+          valueUsd: toUsdStr(amt, dec, outputTokenPriceUsd),
+        });
+      }
+      const totalUsd = feeItems.map((f) => f.valueUsd?.replace(/[$,]/g, "")).filter(Boolean).reduce((sum, s) => sum + parseFloat(s!), 0);
+      return { type: "gasless" as const, sources, gasWei: null, gasUsd: undefined, feeItems, totalFeesUsd: totalUsd > 0 ? `$${totalUsd.toFixed(4)}` : undefined };
     }
     if (acrossQuote) {
-      const feeItems: { label: string; value: string }[] = [];
+      const feeItems: FeeItem[] = [];
       if (acrossQuote.fees?.total?.amount && acrossQuote.fees.total.token) {
         const dec = acrossQuote.fees.total.token.decimals ?? 6;
         const sym = acrossQuote.fees.total.token.symbol ?? "USDC";
-        feeItems.push({ label: "Bridge + fees", value: `${formatUnits(BigInt(acrossQuote.fees.total.amount), dec)} ${sym}` });
-        if (acrossQuote.fees.total.amountUsd) {
-          feeItems.push({ label: "Fees (USD)", value: `~$${parseFloat(acrossQuote.fees.total.amountUsd).toFixed(4)}` });
-        }
+        const amt = BigInt(acrossQuote.fees.total.amount);
+        const usd = acrossQuote.fees.total.amountUsd
+          ? `$${parseFloat(acrossQuote.fees.total.amountUsd).toFixed(4)}`
+          : toUsdStr(amt, dec, outputTokenPriceUsd ?? (sym === "USDC" || sym === "USDT" ? 1 : null));
+        feeItems.push({
+          label: "Bridge + fees",
+          value: `${formatUnits(amt, dec)} ${sym}`,
+          valueUsd: usd,
+        });
       }
       const gasWei =
         estimatedGasWei && gasPriceWei
@@ -601,10 +661,14 @@ export function UnifiedSwap() {
           : acrossQuote.fees?.originGas?.amount
             ? BigInt(acrossQuote.fees.originGas.amount)
             : null;
-      return { type: "crosschain" as const, sources: ["Across"], gasWei, feeItems };
+      const gasUsd = gasWei != null && nativeTokenPriceUsd != null
+        ? `$${(Number(gasWei) / 1e18 * nativeTokenPriceUsd).toFixed(4)}`
+        : undefined;
+      const totalUsd = [...feeItems.map((f) => f.valueUsd?.replace(/[$,]/g, "")).filter(Boolean), gasUsd?.replace(/[$,]/g, "")].reduce((sum, s) => sum + parseFloat(s!), 0);
+      return { type: "crosschain" as const, sources: ["Across"], gasWei, gasUsd, feeItems, totalFeesUsd: totalUsd > 0 ? `$${totalUsd.toFixed(4)}` : undefined };
     }
     return null;
-  }, [swapQuote, quote, acrossQuote, outputToken.symbol, fromChainId, estimatedGasWei, gasPriceWei]);
+  }, [swapQuote, quote, acrossQuote, outputToken.symbol, fromChainId, estimatedGasWei, gasPriceWei, outputTokenPriceUsd, nativeTokenPriceUsd]);
 
   const isGetQuoteDisabled = useMemo(() => {
     if (!amount || parseFloat(amount) <= 0) return true;
@@ -799,16 +863,24 @@ export function UnifiedSwap() {
                   </div>
                 )}
                 {quoteBreakdown.feeItems.map((f) => (
-                  <div key={f.label} className="flex justify-between text-sm">
+                  <div key={f.label} className="flex justify-between items-baseline text-sm gap-2">
                     <span className="text-slate-500">{f.label}</span>
-                    <span className="text-white">{f.value}</span>
+                    <span className="text-right">
+                      <span className="text-white">{f.value}</span>
+                      {f.valueUsd && <span className="text-slate-400 ml-1">({f.valueUsd})</span>}
+                    </span>
                   </div>
                 ))}
                 {quoteBreakdown.gasWei != null && (
                   <>
-                    <div className="flex justify-between text-sm">
+                    <div className="flex justify-between items-baseline text-sm gap-2">
                       <span className="text-slate-500">Est. gas</span>
-                      <span className="text-white">~{formatUnits(quoteBreakdown.gasWei, 18)} {fromChainId === 137 ? "MATIC" : fromChainId === 56 ? "BNB" : "ETH"}</span>
+                      <span className="text-right">
+                        <span className="text-white">~{formatUnits(quoteBreakdown.gasWei, 18)} {fromChainId === 137 ? "MATIC" : fromChainId === 56 ? "BNB" : "ETH"}</span>
+                        {quoteBreakdown.gasUsd && (
+                          <span className="text-slate-400 ml-1">({quoteBreakdown.gasUsd})</span>
+                        )}
+                      </span>
                     </div>
                     {gasPriceWei != null && (
                       <div className="flex justify-between text-sm">
@@ -817,6 +889,12 @@ export function UnifiedSwap() {
                       </div>
                     )}
                   </>
+                )}
+                {quoteBreakdown.totalFeesUsd && (
+                  <div className="flex justify-between text-sm font-medium pt-2 border-t border-slate-700/50 mt-1">
+                    <span className="text-slate-400">Total fees</span>
+                    <span className="text-white">{quoteBreakdown.totalFeesUsd}</span>
+                  </div>
                 )}
                 {quoteBreakdown.type === "gasless" && (
                   <p className="text-xs text-emerald-400">Gasless — no gas to pay</p>
