@@ -830,8 +830,7 @@ export function Swap() {
                 <select
                   value={sellToken}
                   onChange={(e) => { setSellToken(e.target.value as `0x${string}`); setQuote(null); setSwapQuote(null); }}
-                  className="rounded-2xl bg-[var(--delta-card)] border border-[var(--swap-pill-border)] text-white text-sm font-medium px-4 py-2.5 min-w-[7rem] cursor-pointer focus:ring-2 focus:ring-[var(--swap-accent)] appearance-none bg-no-repeat bg-right pr-9 shrink-0"
-                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
+                  className="rounded-xl bg-[var(--delta-card)] border border-[var(--swap-pill-border)] text-white text-sm px-3 py-2"
                   aria-label="Select token to sell"
                 >
                   {sellTokenOptions.map((t) => (
@@ -899,8 +898,7 @@ export function Swap() {
                 <select
                   value={buyToken}
                   onChange={(e) => { setBuyToken(e.target.value as `0x${string}`); setQuote(null); setSwapQuote(null); }}
-                  className="rounded-2xl bg-[var(--delta-card)] border border-[var(--swap-pill-border)] text-white text-sm font-medium px-4 py-2.5 min-w-[7rem] cursor-pointer focus:ring-2 focus:ring-[var(--swap-accent)] appearance-none bg-no-repeat bg-right pr-9 shrink-0"
-                  style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
+                  className="rounded-xl bg-[var(--delta-card)] border border-[var(--swap-pill-border)] text-white text-sm px-3 py-2"
                   aria-label="Select token to receive"
                 >
                   {buyTokenOptions.map((t) => (
