@@ -27,6 +27,10 @@ const ERC20_APPROVE_ABI = [
   { inputs: [{ name: "account", type: "address" }], name: "balanceOf", outputs: [{ type: "uint256" }], stateMutability: "view", type: "function" },
 ] as const;
 
+const WETH_WITHDRAW_ABI = [
+  { inputs: [{ name: "wad", type: "uint256" }], name: "withdraw", outputs: [], stateMutability: "nonpayable", type: "function" },
+] as const;
+
 const NATIVE_SYMBOL_BY_CHAIN: Record<SupportedChainId, string> = {
   8453: "ETH",
   42161: "ETH",
@@ -211,6 +215,7 @@ export function Swap() {
 
   const isSellingNative = sellToken === WRAPPED_NATIVE[supportedChainId];
   const isBuyingNative = buyToken === NATIVE_TOKEN_ADDRESS;
+  const isUnwrap = sellToken === WRAPPED_NATIVE[supportedChainId] && buyToken === NATIVE_TOKEN_ADDRESS;
 
   const tokens = useMemo(
     () => TOKEN_OPTIONS[supportedChainId] ?? TOKEN_OPTIONS[8453],
@@ -308,7 +313,9 @@ export function Swap() {
     ? customRecipient.trim()
     : address ?? "";
 
-  const displaySellSymbol = isSellingNative ? (NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH") : sellSymbolForLogic;
+  const displaySellSymbol = isUnwrap
+    ? (supportedChainId === 56 ? "WBNB" : supportedChainId === 137 ? "WMATIC" : "WETH")
+    : (isSellingNative ? (NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH") : sellSymbolForLogic);
   const sellSymbol = displaySellSymbol;
   const minSellAmount = MIN_SELL_AMOUNT[sellSymbolForLogic] ?? 1;
   const effectiveSellAmount = amountMode === "usd" && usdInput
@@ -382,6 +389,31 @@ export function Swap() {
           slippageBps: 100,
         });
         if (res.liquidityAvailable && res.transaction) {
+          const buyDecimals = isBuyingNative ? 18 : getTokenDecimals(tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH", supportedChainId);
+          const buyAmountHuman = Number(formatUnits(BigInt(res.buyAmount), buyDecimals));
+          const isWtxcTrade = supportedChainId === 1 && (sellToken === WTXC_ETH || buyToken === WTXC_ETH);
+          if (isWtxcTrade) {
+            try {
+              const [sellPriceRes, buyPriceRes] = await Promise.all([
+                fetch(`/api/token-price?chainId=1&address=${encodeURIComponent(sellToken === WTXC_ETH ? WTXC_ETH : USDC_ETH)}`),
+                fetch(`/api/token-price?chainId=1&address=${encodeURIComponent(buyToken === WTXC_ETH ? WTXC_ETH : USDC_ETH)}`),
+              ]);
+              const sellPrice = (await sellPriceRes.json()) as { usd?: number | null };
+              const buyPrice = (await buyPriceRes.json()) as { usd?: number | null };
+              const sellUsd = amountToUse * (typeof sellPrice?.usd === "number" ? sellPrice.usd : 0);
+              const expectedBuyAmount = buyPrice?.usd && buyPrice.usd > 0 ? sellUsd / buyPrice.usd : 0;
+              const ratio = expectedBuyAmount > 0 ? buyAmountHuman / expectedBuyAmount : 1;
+              if (ratio < 0.2 || ratio > 5) {
+                setQuoteError("Quote seems incorrect for wTXC (~$0.30). Try Uniswap directly for wTXC/USDC.");
+                setQuote(null);
+                setSwapQuote(null);
+                setQuoteLoading(false);
+                return;
+              }
+            } catch {
+              /* continue with quote */
+            }
+          }
           setSwapQuote(res);
           try {
             const priceAddress = isBuyingNative ? WRAPPED_NATIVE[supportedChainId] : buyToken;
@@ -390,8 +422,6 @@ export function Swap() {
             );
             const { usd } = (await priceRes.json()) as { usd?: number | null };
             if (typeof usd === "number" && usd > 0) {
-              const buyDecimals = isBuyingNative ? 18 : getTokenDecimals(tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH", supportedChainId);
-              const buyAmountHuman = Number(formatUnits(BigInt(res.buyAmount), buyDecimals));
               setReceiveUsd(buyAmountHuman * usd);
             }
           } catch {
@@ -715,6 +745,46 @@ export function Swap() {
     setSwapQuote(null);
   }, []);
 
+  const doUnwrap = useCallback(async () => {
+    if (!walletClient || !address || !sellAmount || parseFloat(sellAmount) <= 0) return;
+    const wrappedAddr = WRAPPED_NATIVE[supportedChainId];
+    if (!wrappedAddr) return;
+    setSwapStatus("signing");
+    setSwapError(null);
+    try {
+      const amountWei = parseUnits(sellAmount, 18);
+      const hash = await walletClient.writeContract({
+        address: wrappedAddr,
+        abi: WETH_WITHDRAW_ABI,
+        functionName: "withdraw",
+        args: [amountWei],
+      });
+      setTxHash(hash);
+      if (publicClient) {
+        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        if (receipt.status === "reverted") {
+          setSwapError("Unwrap failed");
+          setSwapStatus("error");
+          return;
+        }
+      }
+      addToHistory({
+        chainId: supportedChainId,
+        chainName: CHAIN_NAME[supportedChainId] ?? "Unknown",
+        txHash: hash,
+        sellSymbol: NATIVE_SYMBOL_BY_CHAIN[supportedChainId] === "ETH" ? "WETH" : supportedChainId === 56 ? "WBNB" : "WMATIC",
+        buySymbol: NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH",
+        sellAmount,
+        buyAmount: sellAmount,
+      });
+      setSwapStatus("success");
+      setSellAmount("");
+    } catch (e) {
+      setSwapError(e instanceof Error ? e.message : "Unwrap failed");
+      setSwapStatus("error");
+    }
+  }, [walletClient, address, sellAmount, supportedChainId, publicClient]);
+
   const flipTokens = useCallback(() => {
     const newSell = buyToken === NATIVE_TOKEN_ADDRESS ? WRAPPED_NATIVE[supportedChainId] : buyToken;
     const newBuy = sellToken === WRAPPED_NATIVE[supportedChainId] ? (NATIVE_TOKEN_ADDRESS as `0x${string}`) : sellToken;
@@ -836,7 +906,7 @@ export function Swap() {
                 >
                   {sellTokenOptions.map((t) => (
                     <option key={t.address} value={t.address}>
-                      {t.address === WRAPPED_NATIVE[supportedChainId] ? (NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH") : t.symbol}
+                      {t.symbol}
                     </option>
                   ))}
                 </select>
@@ -882,12 +952,14 @@ export function Swap() {
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
                   <div className="text-white text-3xl sm:text-4xl font-medium truncate">
-                    {(quote || swapQuote)
-                      ? formatUnits(
-                          BigInt((quote ?? swapQuote)!.buyAmount),
-                          isBuyingNative ? 18 : getTokenDecimals(tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH", supportedChainId)
-                        )
-                      : "0"}
+                    {isUnwrap
+                      ? (sellAmount || "0")
+                      : (quote || swapQuote)
+                        ? formatUnits(
+                            BigInt((quote ?? swapQuote)!.buyAmount),
+                            isBuyingNative ? 18 : getTokenDecimals(tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH", supportedChainId)
+                          )
+                        : "0"}
                   </div>
                   <p className="text-sm text-[var(--delta-text-muted)] mt-1">
                     {receiveUsd != null && receiveUsd > 0 && `~ $${receiveUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`}
@@ -909,7 +981,7 @@ export function Swap() {
                   ))}
                 </select>
               </div>
-              {feeDisplay && (
+              {feeDisplay && !isUnwrap && (
                 <p className="text-xs text-slate-400 mt-1.5">Fee (0.1%): {feeDisplay}</p>
               )}
             </div>
@@ -922,16 +994,26 @@ export function Swap() {
           <div className="mt-4 flex flex-col gap-2.5">
             {swapStatus === "idle" && (
               <>
-                {isBelowMin && (
+                {isBelowMin && !isUnwrap && (
                   <p className="text-amber-400 text-xs">Min: {minSellAmount} {sellSymbol}</p>
                 )}
-                <button
-                  onClick={fetchQuote}
-                  disabled={!(amountMode === "usd" ? usdInput : sellAmount) || (amountMode === "usd" ? parseFloat(usdInput || "0") <= 0 : amountNum <= 0) || quoteLoading || isBelowMin}
-                  className="w-full py-4 rounded-2xl bg-[#2d2d3d] hover:bg-[#3d3d4d] disabled:opacity-50 disabled:cursor-not-allowed text-[var(--swap-accent)] font-semibold text-base transition mt-5"
-                >
-                  {quoteLoading ? "Getting quote..." : "Get started"}
-                </button>
+                {isUnwrap ? (
+                  <button
+                    onClick={doUnwrap}
+                    disabled={!sellAmount || parseFloat(sellAmount) <= 0}
+                    className="w-full py-4 rounded-2xl bg-[var(--swap-accent)] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-base transition mt-5"
+                  >
+                    Unwrap to {NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH"}
+                  </button>
+                ) : (
+                  <button
+                    onClick={fetchQuote}
+                    disabled={!(amountMode === "usd" ? usdInput : sellAmount) || (amountMode === "usd" ? parseFloat(usdInput || "0") <= 0 : amountNum <= 0) || quoteLoading || isBelowMin}
+                    className="w-full py-4 rounded-2xl bg-[#2d2d3d] hover:bg-[#3d3d4d] disabled:opacity-50 disabled:cursor-not-allowed text-[var(--swap-accent)] font-semibold text-base transition mt-5"
+                  >
+                    {quoteLoading ? "Getting quote..." : "Get started"}
+                  </button>
+                )}
                 {quote && !isSellingNative && !quote.approval && (
                   <button
                     type="button"

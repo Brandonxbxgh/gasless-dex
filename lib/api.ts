@@ -160,6 +160,7 @@ export async function getSwapQuote(params: {
   swapFeeToken?: string;
   tradeSurplusRecipient?: string;
   slippageBps?: number;
+  excludedSources?: string;
 }): Promise<SwapQuoteResponse> {
   const qs = buildQuery({
     chainId: params.chainId,
@@ -173,6 +174,7 @@ export async function getSwapQuote(params: {
     swapFeeToken: params.swapFeeToken,
     tradeSurplusRecipient: params.tradeSurplusRecipient,
     slippageBps: params.slippageBps ?? 100,
+    excludedSources: params.excludedSources,
   });
   const res = await fetch(`/api/swap-quote?${qs}`);
   return handleResponse(res) as Promise<SwapQuoteResponse>;
