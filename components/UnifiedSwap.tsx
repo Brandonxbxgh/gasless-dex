@@ -214,25 +214,6 @@ export function UnifiedSwap() {
   const hasQuote = !!(quote || swapQuote || acrossQuote);
   const canExecute = hasQuote || isWrap || isUnwrap;
 
-  const quoteRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const fetchQuoteRef = useRef(fetchQuote);
-  fetchQuoteRef.current = fetchQuote;
-  useEffect(() => {
-    if (!hasQuote || isWrap || isUnwrap) {
-      if (quoteRefreshRef.current) {
-        clearInterval(quoteRefreshRef.current);
-        quoteRefreshRef.current = null;
-      }
-      return;
-    }
-    quoteRefreshRef.current = setInterval(() => {
-      fetchQuoteRef.current();
-    }, 30000);
-    return () => {
-      if (quoteRefreshRef.current) clearInterval(quoteRefreshRef.current);
-    };
-  }, [hasQuote, isWrap, isUnwrap]);
-
   const handleMax = useCallback(() => {
     if (inputBalanceFormatted && parseFloat(inputBalanceFormatted) > 0) {
       setAmount(inputBalanceFormatted);
@@ -306,6 +287,25 @@ export function UnifiedSwap() {
       setLoading(false);
     }
   }, [address, amount, inputToken, outputToken, fromChainId, toChainId, isSameChain, isInputNative, isOutputNative]);
+
+  const quoteRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fetchQuoteRef = useRef(fetchQuote);
+  fetchQuoteRef.current = fetchQuote;
+  useEffect(() => {
+    if (!hasQuote || isWrap || isUnwrap) {
+      if (quoteRefreshRef.current) {
+        clearInterval(quoteRefreshRef.current);
+        quoteRefreshRef.current = null;
+      }
+      return;
+    }
+    quoteRefreshRef.current = setInterval(() => {
+      fetchQuoteRef.current();
+    }, 30000);
+    return () => {
+      if (quoteRefreshRef.current) clearInterval(quoteRefreshRef.current);
+    };
+  }, [hasQuote, isWrap, isUnwrap]);
 
   const executeSameChain = useCallback(async () => {
     if (!walletClient || !address) return;
