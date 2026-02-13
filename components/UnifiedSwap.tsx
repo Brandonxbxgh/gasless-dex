@@ -181,6 +181,16 @@ export function UnifiedSwap() {
   }, [activeTab, fromChainId]);
 
   useEffect(() => {
+    const tokens = TOKENS_BY_CHAIN[toChainId] ?? TOKENS_BY_CHAIN[8453];
+    const match = tokens.find((t) => t.address === outputToken.address);
+    if (match && match.symbol !== outputToken.symbol) {
+      setOutputToken(match);
+    } else if (!match) {
+      setOutputToken(tokens[0]);
+    }
+  }, [toChainId, outputToken.address, outputToken.symbol]);
+
+  useEffect(() => {
     if (activeTab === "bridge" && fromChainId === toChainId) {
       const other = CHAINS.find((c) => c.id !== fromChainId);
       if (other) setToChainId(other.id);
