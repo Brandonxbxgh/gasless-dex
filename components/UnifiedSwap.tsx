@@ -140,6 +140,7 @@ export function UnifiedSwap() {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [txChainId, setTxChainId] = useState<number | null>(null);
   const [completedAction, setCompletedAction] = useState<"wrap" | "unwrap" | "swap" | "bridge" | null>(null);
+  const [showSignConfirm, setShowSignConfirm] = useState(false);
   const [needsManualApproval, setNeedsManualApproval] = useState(false);
   const [approvingInProgress, setApprovingInProgress] = useState(false);
   const [inputTokenPriceUsd, setInputTokenPriceUsd] = useState<number | null>(null);
@@ -244,6 +245,7 @@ export function UnifiedSwap() {
     setTxChainId(null);
     setCompletedAction(null);
     setError(null);
+    setShowSignConfirm(false);
     setAmount("");
     setQuote(null);
     setSwapQuote(null);
@@ -432,8 +434,15 @@ export function UnifiedSwap() {
         });
         setTxHash(hash);
         setTxChainId(fromChainId);
+        if (publicClient) {
+          const receipt = await publicClient.waitForTransactionReceipt({ hash });
+          if (receipt.status === "reverted") {
+            setError("Transaction failed on-chain.");
+            setSwapping(false);
+            return;
+          }
+        }
         setCompletedAction("wrap");
-        if (publicClient) await publicClient.waitForTransactionReceipt({ hash });
         addToHistory({ chainId: fromChainId, chainName: CHAIN_NAME[fromChainId], txHash: hash, sellSymbol: inputToken.symbol, buySymbol: outputToken.symbol, sellAmount: amount, buyAmount: amount });
         setAmount("");
         setQuote(null);
@@ -449,8 +458,15 @@ export function UnifiedSwap() {
         });
         setTxHash(hash);
         setTxChainId(fromChainId);
+        if (publicClient) {
+          const receipt = await publicClient.waitForTransactionReceipt({ hash });
+          if (receipt.status === "reverted") {
+            setError("Transaction failed on-chain.");
+            setSwapping(false);
+            return;
+          }
+        }
         setCompletedAction("unwrap");
-        if (publicClient) await publicClient.waitForTransactionReceipt({ hash });
         addToHistory({ chainId: fromChainId, chainName: CHAIN_NAME[fromChainId], txHash: hash, sellSymbol: inputToken.symbol, buySymbol: outputToken.symbol, sellAmount: amount, buyAmount: amount });
         setAmount("");
         setQuote(null);
@@ -483,8 +499,15 @@ export function UnifiedSwap() {
         });
         setTxHash(hash);
         setTxChainId(fromChainId);
+        if (publicClient) {
+          const receipt = await publicClient.waitForTransactionReceipt({ hash });
+          if (receipt.status === "reverted") {
+            setError("Transaction failed on-chain. Get a fresh quote and try again.");
+            setSwapping(false);
+            return;
+          }
+        }
         setCompletedAction("swap");
-        if (publicClient) await publicClient.waitForTransactionReceipt({ hash });
         addToHistory({
           chainId: fromChainId, chainName: CHAIN_NAME[fromChainId], txHash: hash,
           sellSymbol: inputToken.symbol, buySymbol: outputToken.symbol,
@@ -621,20 +644,42 @@ export function UnifiedSwap() {
       });
       setTxHash(hash);
       setTxChainId(fromChainId);
+      if (publicClient) {
+        const receipt = await publicClient.waitForTransactionReceipt({ hash });
+        if (receipt.status === "reverted") {
+          setError("Transaction failed on-chain (e.g. InvalidQuoteTimestamp). Use Retry with fresh quote below.");
+          setSwapping(false);
+          return;
+        }
+      }
       setCompletedAction("bridge");
       setAmount("");
       setAcrossQuote(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Swap failed");
+      const msg = e instanceof Error ? e.message : "Swap failed";
+      setError(msg);
     } finally {
       setSwapping(false);
     }
   }, [acrossQuote, walletClient, address, publicClient, needsChainSwitch, switchChain, fromChainId, toChainId, amount, inputToken, outputToken, isInputNative, isOutputNative, estimatedGasWei, gasPriceWei]);
 
+  const isQuoteExpiredError = error != null && (
+    error.toLowerCase().includes("invalidquotetimestamp") ||
+    error.toLowerCase().includes("quote expired") ||
+    error.toLowerCase().includes("transaction failed on-chain")
+  );
+
   const execute = useCallback(() => {
     if (isSameChain) executeSameChain();
-    else executeCrossChain();
-  }, [isSameChain, executeSameChain, executeCrossChain]);
+    else {
+      setShowSignConfirm(true);
+    }
+  }, [isSameChain, executeSameChain]);
+
+  const confirmAndExecuteCrossChain = useCallback(() => {
+    setShowSignConfirm(false);
+    executeCrossChain();
+  }, [executeCrossChain]);
 
   const quoteBreakdown = useMemo(() => {
     type FeeItem = { label: string; value: string; valueUsd?: string };
@@ -781,6 +826,7 @@ export function UnifiedSwap() {
                 setSwapQuote(null);
                 setAcrossQuote(null);
                 setQuoteReceivedAt(null);
+                setShowSignConfirm(false);
               }}
               className="w-full rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] text-white text-sm px-3 py-2 mb-2"
             >
@@ -801,6 +847,7 @@ export function UnifiedSwap() {
                   setSwapQuote(null);
                   setAcrossQuote(null);
                   setQuoteReceivedAt(null);
+                  setShowSignConfirm(false);
                 }}
                 className="flex-1 rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] text-white px-3 py-2"
               />
@@ -813,6 +860,7 @@ export function UnifiedSwap() {
                   setSwapQuote(null);
                   setAcrossQuote(null);
                   setQuoteReceivedAt(null);
+                  setShowSignConfirm(false);
                 }}
                 className="rounded-xl bg-[var(--delta-card)] border border-[var(--swap-pill-border)] text-white text-sm px-3 py-2 w-28"
               >
@@ -844,6 +892,7 @@ export function UnifiedSwap() {
                 setSwapQuote(null);
                 setAcrossQuote(null);
                 setQuoteReceivedAt(null);
+                setShowSignConfirm(false);
               }}
               className="w-full rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] text-white text-sm px-3 py-2 mb-2"
             >
@@ -862,6 +911,7 @@ export function UnifiedSwap() {
                   setSwapQuote(null);
                   setAcrossQuote(null);
                   setQuoteReceivedAt(null);
+                  setShowSignConfirm(false);
                 }}
                 className="rounded-lg bg-[var(--delta-card)] border border-[var(--swap-pill-border)] text-white text-sm px-2 py-1.5"
               >
@@ -892,9 +942,14 @@ export function UnifiedSwap() {
           )}
 
           {error && <p className="text-red-400 text-sm">{error}</p>}
+          {txHash && !completedAction && (
+            <a href={`${EXPLORER_URL[txChainId ?? fromChainId] ?? "https://basescan.org"}/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="block text-center text-sm text-sky-400 hover:underline">
+              View failed transaction
+            </a>
+          )}
 
           <div className="flex flex-col gap-2">
-            {txHash ? (
+            {txHash && completedAction ? (
               <>
                 <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/30 p-4 text-center">
                   <p className="text-emerald-400 font-semibold text-lg">
@@ -996,7 +1051,7 @@ export function UnifiedSwap() {
                   <p className="text-xs text-emerald-400">Gasless — no gas to pay</p>
                 )}
                 {quoteBreakdown.type === "crosschain" && (
-                  <p className="text-xs text-slate-500">Gas on origin chain only</p>
+                  <p className="text-xs text-amber-400/90">Using Ledger? Have it ready before clicking Swap — sign within 60 seconds.</p>
                 )}
                 {quoteBreakdown.type !== "gasless" && needsChainSwitch && (
                   <p className="text-xs text-amber-400">Switch to origin chain to see gas estimate</p>
@@ -1010,13 +1065,47 @@ export function UnifiedSwap() {
               </div>
             )}
 
-            {hasQuote && !isWrap && !isUnwrap && (
+            {showSignConfirm && !isSameChain && hasQuote && (
+              <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-4 space-y-3">
+                <p className="text-amber-400 text-sm font-medium">
+                  Have your Ledger ready and unlocked. We&apos;ll fetch a fresh quote and prompt you to sign. Sign within 60 seconds.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowSignConfirm(false)}
+                    className="flex-1 py-2.5 rounded-xl bg-[#2d2d3d] hover:bg-[#3d3d4d] text-slate-300 font-medium text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={confirmAndExecuteCrossChain}
+                    disabled={swapping}
+                    className="flex-1 py-2.5 rounded-xl bg-[var(--swap-accent)] hover:opacity-90 disabled:opacity-50 text-white font-semibold text-sm"
+                  >
+                    {swapping ? "Fetching & signing..." : "Continue to sign"}
+                  </button>
+                </div>
+              </div>
+            )}
+            {hasQuote && !isWrap && !isUnwrap && !showSignConfirm && (
               <button
                 onClick={execute}
                 disabled={isSwapDisabled}
                 className="w-full py-4 rounded-2xl bg-[var(--swap-accent)] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-base"
               >
                 {swapping ? "Swapping..." : "Swap"}
+              </button>
+            )}
+            {isQuoteExpiredError && (
+              <button
+                onClick={async () => {
+                  setError(null);
+                  await fetchQuote();
+                  if (!isSameChain) setShowSignConfirm(true);
+                }}
+                className="w-full py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold text-sm"
+              >
+                Retry with fresh quote
               </button>
             )}
 
