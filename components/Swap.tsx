@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useMemo, useEffect } from "react";
-import { useAccount, useChainId, useSwitchChain, useWalletClient, usePublicClient, useDisconnect } from "wagmi";
+import { useAccount, useChainId, useSwitchChain, useWalletClient, usePublicClient, useDisconnect, useReadContract, useBalance } from "wagmi";
 import { parseUnits, formatUnits, isAddress, maxUint256 } from "viem";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import {
@@ -20,9 +20,11 @@ import {
   getDefaultSellToken,
   type SupportedChainId,
 } from "@/lib/chains";
+import { addToHistory } from "@/lib/history";
 
 const ERC20_APPROVE_ABI = [
   { inputs: [{ name: "spender", type: "address" }, { name: "amount", type: "uint256" }], name: "approve", outputs: [{ type: "bool" }], stateMutability: "nonpayable", type: "function" },
+  { inputs: [{ name: "account", type: "address" }], name: "balanceOf", outputs: [{ type: "uint256" }], stateMutability: "view", type: "function" },
 ] as const;
 
 const NATIVE_SYMBOL_BY_CHAIN: Record<SupportedChainId, string> = {
@@ -31,6 +33,14 @@ const NATIVE_SYMBOL_BY_CHAIN: Record<SupportedChainId, string> = {
   137: "MATIC",
   56: "BNB",
   1: "ETH",
+};
+
+const CHAIN_NAME: Record<SupportedChainId, string> = {
+  8453: "Base",
+  42161: "Arbitrum",
+  137: "Polygon",
+  56: "BNB",
+  1: "Ethereum",
 };
 
 const EXPLORER_URL: Record<SupportedChainId, string> = {
@@ -186,6 +196,54 @@ export function Swap() {
     [supportedChainId]
   );
 
+  const sellSymbolForLogic = tokens.find((t) => t.address === sellToken)?.symbol ?? "USDC";
+
+  const { data: sellBalanceRaw } = useReadContract({
+    address: sellToken,
+    abi: ERC20_APPROVE_ABI,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+  });
+
+  const { data: nativeBalance } = useBalance({ address: buyToken === NATIVE_TOKEN_ADDRESS ? address : undefined });
+
+  const { data: buyBalanceRaw } = useReadContract({
+    address: buyToken !== NATIVE_TOKEN_ADDRESS ? buyToken : undefined,
+    abi: ERC20_APPROVE_ABI,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+  });
+
+  const sellBalanceFormatted = useMemo(() => {
+    if (!sellBalanceRaw || typeof sellBalanceRaw !== "bigint") return null;
+    const dec = getTokenDecimals(sellSymbolForLogic, supportedChainId);
+    return formatUnits(sellBalanceRaw, dec);
+  }, [sellBalanceRaw, sellSymbolForLogic, supportedChainId]);
+
+  const buySymbolForDisplay = buyToken === NATIVE_TOKEN_ADDRESS
+    ? (NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH")
+    : (tokens.find((t) => t.address === buyToken)?.symbol ?? "?");
+
+  const buyBalanceFormatted = useMemo(() => {
+    if (buyToken === NATIVE_TOKEN_ADDRESS && nativeBalance?.value != null) {
+      return formatUnits(nativeBalance.value, 18);
+    }
+    if (buyBalanceRaw != null && typeof buyBalanceRaw === "bigint") {
+      const sym = tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH";
+      return formatUnits(buyBalanceRaw, getTokenDecimals(sym, supportedChainId));
+    }
+    return null;
+  }, [buyToken, nativeBalance?.value, buyBalanceRaw, tokens, supportedChainId]);
+
+  const handleMaxClick = useCallback(() => {
+    if (!sellBalanceFormatted) return;
+    const amt = parseFloat(sellBalanceFormatted);
+    if (amt <= 0) return;
+    setSellAmount(sellBalanceFormatted);
+    setQuote(null);
+    setSwapQuote(null);
+  }, [sellBalanceFormatted]);
+
   const buyTokenOptions = useMemo(
     () => [
       ...tokens,
@@ -219,7 +277,6 @@ export function Swap() {
     ? customRecipient.trim()
     : address ?? "";
 
-  const sellSymbolForLogic = tokens.find((t) => t.address === sellToken)?.symbol ?? "USDC";
   const displaySellSymbol = isSellingNative ? (NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH") : sellSymbolForLogic;
   const sellSymbol = displaySellSymbol;
   const minSellAmount = MIN_SELL_AMOUNT[sellSymbolForLogic] ?? 1;
@@ -418,6 +475,16 @@ export function Swap() {
         }
         if (statusRes.status === "confirmed" && statusRes.transactionHash) {
           setTxHash(statusRes.transactionHash);
+          addToHistory({
+            chainId: supportedChainId,
+            chainName: CHAIN_NAME[supportedChainId] ?? "Unknown",
+            txHash: statusRes.transactionHash,
+            tradeHash: hash,
+            sellSymbol: sellSymbol,
+            buySymbol: buyToken === NATIVE_TOKEN_ADDRESS ? (NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH") : (tokens.find((t) => t.address === buyToken)?.symbol ?? "?"),
+            sellAmount: formatUnits(BigInt(quote.sellAmount), getTokenDecimals(sellSymbolForLogic, supportedChainId)),
+            buyAmount: formatUnits(BigInt(quote.buyAmount), buyToken === NATIVE_TOKEN_ADDRESS ? 18 : getTokenDecimals(tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH", supportedChainId)),
+          });
           setSwapStatus("success");
         } else {
           setSwapStatus("success");
@@ -427,7 +494,7 @@ export function Swap() {
         setSwapStatus("error");
       }
     },
-    [quote, address, walletClient, supportedChainId]
+    [quote, address, walletClient, supportedChainId, sellSymbol, buyToken, tokens, sellSymbolForLogic]
   );
 
   const doApprove = useCallback(async () => {
@@ -507,6 +574,15 @@ export function Swap() {
           return;
         }
       }
+      addToHistory({
+        chainId: supportedChainId,
+        chainName: CHAIN_NAME[supportedChainId] ?? "Unknown",
+        txHash: hash,
+        sellSymbol,
+        buySymbol: buyToken === NATIVE_TOKEN_ADDRESS ? (NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH") : (tokens.find((t) => t.address === buyToken)?.symbol ?? "?"),
+        sellAmount: formatUnits(BigInt(freshQuote.sellAmount), getTokenDecimals(sellSymbolForLogic, supportedChainId)),
+        buyAmount: formatUnits(BigInt(freshQuote.buyAmount), buyToken === NATIVE_TOKEN_ADDRESS ? 18 : getTokenDecimals(tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH", supportedChainId)),
+      });
       setSwapStatus("success");
     } catch (e) {
       let msg = e instanceof Error ? e.message : "Approval or swap failed";
@@ -542,6 +618,15 @@ export function Swap() {
             return;
           }
         }
+        addToHistory({
+          chainId: supportedChainId,
+          chainName: CHAIN_NAME[supportedChainId] ?? "Unknown",
+          txHash: hash,
+          sellSymbol,
+          buySymbol: buyToken === NATIVE_TOKEN_ADDRESS ? (NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH") : (tokens.find((t) => t.address === buyToken)?.symbol ?? "?"),
+          sellAmount: formatUnits(BigInt(swapQuote.sellAmount), getTokenDecimals(sellSymbolForLogic, supportedChainId)),
+          buyAmount: formatUnits(BigInt(swapQuote.buyAmount), buyToken === NATIVE_TOKEN_ADDRESS ? 18 : getTokenDecimals(tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH", supportedChainId)),
+        });
         setSwapStatus("success");
         return;
       }
@@ -728,10 +813,18 @@ export function Swap() {
               {isSellingNative && (
                 <p className="text-xs text-amber-400 mt-2">Sending native (you pay gas)</p>
               )}
-              <div className="flex items-center gap-2 mt-2">
-                {amountMode === "token" ? (
-                  <button type="button" onClick={() => setAmountMode("usd")} className="text-xs text-[var(--delta-text-muted)] hover:text-white">Enter $ amount</button>
-                ) : null}
+              <div className="flex items-center justify-between gap-2 mt-2">
+                <div className="flex items-center gap-2">
+                  {amountMode === "token" ? (
+                    <>
+                      <button type="button" onClick={handleMaxClick} disabled={!sellBalanceFormatted || parseFloat(sellBalanceFormatted) <= 0} className="text-xs font-medium text-[var(--swap-accent)] hover:text-[var(--swap-accent)]/80 disabled:opacity-50 disabled:cursor-not-allowed">Max</button>
+                      <button type="button" onClick={() => setAmountMode("usd")} className="text-xs text-[var(--delta-text-muted)] hover:text-white">Enter $ amount</button>
+                    </>
+                  ) : null}
+                </div>
+                {sellBalanceFormatted != null && (
+                  <span className="text-xs text-slate-500">Balance: {parseFloat(sellBalanceFormatted).toLocaleString("en-US", { maximumFractionDigits: 6 })} {sellSymbol}</span>
+                )}
               </div>
             </div>
 
@@ -765,11 +858,12 @@ export function Swap() {
                         )
                       : "0"}
                   </div>
-                  {receiveUsd != null && receiveUsd > 0 && (
-                    <p className="text-sm text-[var(--delta-text-muted)] mt-1">
-                      ~ ${receiveUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
-                    </p>
-                  )}
+                  <p className="text-sm text-[var(--delta-text-muted)] mt-1">
+                    {receiveUsd != null && receiveUsd > 0 && `~ $${receiveUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`}
+                    {buyBalanceFormatted != null && (
+                      <span className={receiveUsd != null && receiveUsd > 0 ? "ml-2" : ""}>Balance: {parseFloat(buyBalanceFormatted).toLocaleString("en-US", { maximumFractionDigits: 6 })} {buySymbolForDisplay}</span>
+                    )}
+                  </p>
                 </div>
                 <select
                   value={buyToken}

@@ -29,6 +29,16 @@ export function Header() {
             Swap
           </Link>
           <Link
+            href="/history"
+            className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+              pathname === "/history"
+                ? "bg-[var(--swap-accent)]/20 text-[var(--swap-accent)]"
+                : "text-slate-300 hover:bg-slate-800 hover:text-white"
+            }`}
+          >
+            History
+          </Link>
+          <Link
             href="/how-it-works"
             className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
               pathname === "/how-it-works"
