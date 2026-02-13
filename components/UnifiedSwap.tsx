@@ -122,7 +122,7 @@ export function UnifiedSwap() {
   const [amount, setAmount] = useState("");
   const [quote, setQuote] = useState<GaslessQuoteResponse | null>(null);
   const [swapQuote, setSwapQuote] = useState<SwapQuoteResponse | null>(null);
-  const [acrossQuote, setAcrossQuote] = useState<{ approvalTxns?: { to: string; data: string; value?: string }[]; swapTx: { to: string; data: string; value?: string }; steps?: { bridge?: { outputAmount: string; tokenOut?: { decimals: number } } } } | null>(null);
+  const [acrossQuote, setAcrossQuote] = useState<{ approvalTxns?: { to: string; data: string; value?: string }[]; swapTx: { to: string; data: string; value?: string }; expectedOutputAmount?: string; outputToken?: { decimals: number }; steps?: { bridge?: { outputAmount: string; tokenOut?: { decimals: number } } } } | null>(null);
   const [loading, setLoading] = useState(false);
   const [swapping, setSwapping] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -199,8 +199,10 @@ export function UnifiedSwap() {
 
   const outputAmount = useMemo(() => {
     if (isWrap || isUnwrap) return amount || "0";
-    if (acrossQuote?.steps?.bridge?.outputAmount && acrossQuote.steps.bridge.tokenOut)
-      return formatUnits(BigInt(acrossQuote.steps.bridge.outputAmount), acrossQuote.steps.bridge.tokenOut.decimals);
+    if (acrossQuote?.expectedOutputAmount) {
+      const dec = acrossQuote.outputToken?.decimals ?? getTokenDecimals(outputToken.symbol, toChainId);
+      return formatUnits(BigInt(acrossQuote.expectedOutputAmount), dec);
+    }
     if (quote) return formatUnits(BigInt(quote.buyAmount), getTokenDecimals(outputToken.symbol, toChainId));
     if (swapQuote) return formatUnits(BigInt(swapQuote.buyAmount), getTokenDecimals(outputToken.symbol, toChainId));
     return "0";
@@ -624,14 +626,14 @@ export function UnifiedSwap() {
           </div>
 
           {needsChainSwitch && (
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-amber-400 text-xs">Switch to {CHAINS.find((c) => c.id === fromChainId)?.name} to execute</p>
+            <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-3 space-y-2">
+              <p className="text-amber-400 text-xs">Your wallet is on a different network. The transaction must be sent from {CHAINS.find((c) => c.id === fromChainId)?.name}.</p>
               <button
                 type="button"
                 onClick={() => switchChain?.({ chainId: fromChainId })}
-                className="text-xs font-medium text-[var(--swap-accent)] hover:opacity-80 px-3 py-1.5 rounded-lg border border-[var(--swap-accent)]/50"
+                className="w-full text-xs font-medium text-amber-400 hover:text-amber-300 px-3 py-2 rounded-lg border border-amber-500/50 hover:bg-amber-500/10"
               >
-                Switch network
+                Switch to {CHAINS.find((c) => c.id === fromChainId)?.name}
               </button>
             </div>
           )}
