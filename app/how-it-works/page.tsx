@@ -1,178 +1,317 @@
 import Link from "next/link";
 
 const CHAINS = [
+  { id: 1, name: "Ethereum" },
   { id: 8453, name: "Base" },
   { id: 42161, name: "Arbitrum" },
   { id: 137, name: "Polygon" },
+  { id: 10, name: "Optimism" },
   { id: 56, name: "BNB Smart Chain" },
-  { id: 1, name: "Ethereum" },
 ] as const;
 
-const CHAIN_TOKENS: Record<number, { symbol: string; name: string }[]> = {
-  8453: [
-    { symbol: "USDC", name: "USD Coin" },
-    { symbol: "USDT", name: "Tether" },
-    { symbol: "WETH", name: "Wrapped ETH" },
-  ],
-  42161: [
-    { symbol: "USDC", name: "USD Coin" },
-    { symbol: "USDT", name: "Tether" },
-    { symbol: "WETH", name: "Wrapped ETH" },
-  ],
-  137: [
-    { symbol: "USDC", name: "USD Coin" },
-    { symbol: "USDT", name: "Tether" },
-    { symbol: "WMATIC", name: "Wrapped MATIC" },
-  ],
-  56: [
-    { symbol: "USDT", name: "Tether" },
-    { symbol: "WBNB", name: "Wrapped BNB" },
-  ],
-  1: [
-    { symbol: "USDC", name: "USD Coin" },
-    { symbol: "USDT", name: "Tether" },
-    { symbol: "WETH", name: "Wrapped ETH" },
-  ],
-};
-
-const NATIVE_BY_CHAIN: Record<number, string> = {
-  8453: "ETH (native)",
-  42161: "ETH (native)",
-  137: "MATIC (native)",
-  56: "BNB (native)",
-  1: "ETH (native)",
+const CHAIN_TOKENS: Record<number, string[]> = {
+  1: ["ETH", "USDC", "USDT", "WETH"],
+  8453: ["ETH", "USDC", "USDT", "WETH"],
+  42161: ["ETH", "USDC", "USDT", "WETH"],
+  137: ["MATIC", "USDC", "USDT", "WMATIC"],
+  10: ["ETH", "USDC", "USDT", "WETH"],
+  56: ["BNB", "USDT", "WBNB"],
 };
 
 export default function HowItWorksPage() {
   return (
-    <main className="min-h-screen px-4 py-8 sm:px-6 sm:py-10">
+    <main className="min-h-screen px-4 py-8 sm:px-6 sm:py-12">
       <div className="mx-auto max-w-3xl">
-        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-2">
+        <h1 className="text-3xl sm:text-4xl font-bold text-white mb-3">
           How it works
         </h1>
-        <p className="text-slate-200 mb-8">
-          Swaps, available pairs, and what you’ll see before you confirm (sign-only or one tx).
+        <p className="text-slate-300 text-lg mb-12">
+          A complete guide to swapping, wrapping, and bridging on DeltaChainLabs.
         </p>
 
-        <section className="mb-10">
-          <h2 className="text-lg font-semibold text-sky-300 mb-3">
-            How swaps work
+        {/* Overview */}
+        <section className="mb-14">
+          <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">1</span>
+            Overview
           </h2>
-          <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 p-4 sm:p-5 text-slate-200 text-sm space-y-3">
+          <div className="rounded-2xl bg-slate-800/50 border border-slate-700/50 p-6 text-slate-200 space-y-4">
             <p>
-              Pick a chain, enter an amount, choose From/To tokens, and hit <strong>Get started</strong>. You can sell tokens (USDC, USDT, WETH, etc.) or native (ETH, BNB, MATIC), and receive any listed token or real native.
+              DeltaChainLabs lets you swap tokens, wrap/unwrap native currency, and bridge across chains — all in one interface. Connect your wallet, pick your action, and execute.
+            </p>
+            <div className="grid sm:grid-cols-3 gap-4 pt-2">
+              <div className="rounded-xl bg-slate-900/60 border border-slate-700/40 p-4">
+                <p className="font-semibold text-white mb-1">Swap</p>
+                <p className="text-sm text-slate-400">Same-chain token swaps. Gasless for ERC20↔ERC20.</p>
+              </div>
+              <div className="rounded-xl bg-slate-900/60 border border-slate-700/40 p-4">
+                <p className="font-semibold text-white mb-1">Wrap</p>
+                <p className="text-sm text-slate-400">Convert native ↔ wrapped (e.g. ETH ↔ WETH). 1:1, no spread.</p>
+              </div>
+              <div className="rounded-xl bg-slate-900/60 border border-slate-700/40 p-4">
+                <p className="font-semibold text-white mb-1">Bridge</p>
+                <p className="text-sm text-slate-400">Cross-chain swaps. Powered by Across. ~2–10 seconds.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Best quotes / DEX aggregation */}
+        <section className="mb-14">
+          <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">2</span>
+            We find you the best quotes
+          </h2>
+          <div className="rounded-2xl bg-slate-800/50 border border-slate-700/50 p-6 text-slate-200 space-y-4">
+            <p>
+              For same-chain swaps, we use the <strong className="text-white">0x API</strong> — a DEX aggregator that compares liquidity across many sources to find you the best rate.
             </p>
             <p>
-              Before you confirm, the app shows exactly what you’ll do: <strong>Sign only</strong> (no gas - we submit the tx), or <strong>Approve / one transaction</strong> (you pay gas once). So you always see whether the swap is gasless or requires gas before confirming.
+              Instead of checking Uniswap, PancakeSwap, Curve, Balancer, SushiSwap, and others one by one, we query them all at once. The API returns the <strong className="text-white">optimal route</strong> — whether that’s a single DEX or a split across multiple pools — so you get the best output for your trade.
+            </p>
+            <p className="text-sm text-slate-400">
+              The quote breakdown shows the route and all fees before you confirm. No guesswork — you see exactly what you’ll receive.
             </p>
           </div>
         </section>
 
-        <section className="mb-10">
-          <h2 className="text-lg font-semibold text-sky-300 mb-3">
-            What you send vs what you receive
+        {/* Swap Tab */}
+        <section className="mb-14">
+          <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">3</span>
+            Swap tab — same-chain swaps
           </h2>
-          <ul className="space-y-2 text-slate-200 text-sm">
-            <li>
-              <strong className="text-white">Sending (From):</strong> If you choose ETH, BNB, or MATIC in the dropdown, you’re sending <strong>native</strong> chain currency (one tx, you pay gas). If you choose USDC, USDT, WETH, etc., you’re sending that token; the confirm step will show whether it’s sign-only or requires a tx.
-            </li>
-            <li>
-              <strong className="text-white">Receiving (To):</strong> Choose <strong>“ETH (native)”</strong> (or BNB/MATIC native) to receive real chain currency. Choose WETH, WBNB, or WMATIC to receive <strong>wrapped</strong>; we show “Receiving WETH (wrapped), not native” so it’s clear. Stables (USDC, USDT) are received as usual.
-            </li>
-          </ul>
+          <div className="rounded-2xl bg-slate-800/50 border border-slate-700/50 p-6 text-slate-200 space-y-4">
+            <p>
+              Swap any supported token for another on the <strong className="text-white">same chain</strong>. From and To chains are locked to the same network.
+            </p>
+            <div>
+              <h3 className="font-medium text-white mb-2">Gasless vs. paid</h3>
+              <ul className="space-y-2 text-sm">
+                <li className="flex gap-2">
+                  <span className="text-emerald-400 shrink-0">●</span>
+                  <span><strong className="text-white">Gasless:</strong> ERC20 ↔ ERC20 (e.g. USDC → WETH). You sign only; we submit the transaction. No gas from you.</span>
+                </li>
+                <li className="flex gap-2">
+                  <span className="text-amber-400 shrink-0">●</span>
+                  <span><strong className="text-white">Paid gas:</strong> When native (ETH, BNB, MATIC) is involved — either selling or receiving — you pay gas for one transaction.</span>
+                </li>
+              </ul>
+            </div>
+            <p className="text-sm text-slate-400">
+              The quote breakdown shows exactly what you’ll pay before you confirm.
+            </p>
+          </div>
         </section>
 
-        <section className="mb-10">
-          <h2 className="text-lg font-semibold text-sky-300 mb-3">
-            Sending to a different wallet (recipient address)
+        {/* Wrap Tab */}
+        <section className="mb-14">
+          <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">4</span>
+            Wrap tab — native ↔ wrapped
           </h2>
-          <p className="text-slate-200 text-sm mb-2">
-            If you enter another address in “Send to different address”, that address only receives the <strong>output</strong> of the swap. All of the following still apply:
-          </p>
-          <ul className="space-y-1.5 text-slate-200 text-sm list-disc list-inside mb-2">
-            <li><strong className="text-white">What you sell</strong> always comes from <strong>your connected wallet</strong> only. No one else’s funds are used.</li>
-            <li><strong className="text-white">0x</strong> runs the swap (DEX routing, execution). The app only forwards your recipient address to 0x.</li>
-            <li><strong className="text-white">The 0.12% fee</strong> (same-chain) or <strong>0.15%</strong> (cross-chain) goes to the app; the rest of the output goes to you (or to the address you entered).</li>
-          </ul>
-          <p className="text-slate-200 text-sm">
-            So: your tokens in → 0x swaps them → output (minus fee) goes to the address you chose. Nobody is “covering” your swap; you’re only choosing where the result is sent.
-          </p>
+          <div className="rounded-2xl bg-slate-800/50 border border-slate-700/50 p-6 text-slate-200 space-y-4">
+            <p>
+              Convert between <strong className="text-white">native</strong> chain currency (ETH, BNB, MATIC) and its <strong className="text-white">wrapped</strong> form (WETH, WBNB, WMATIC).
+            </p>
+            <ul className="space-y-2 text-sm">
+              <li><strong className="text-white">Wrap:</strong> Native → Wrapped (e.g. 1 ETH → 1 WETH). You pay gas.</li>
+              <li><strong className="text-white">Unwrap:</strong> Wrapped → Native (e.g. 1 WETH → 1 ETH). You pay gas.</li>
+            </ul>
+            <p>
+              Exchange is <strong className="text-white">1:1</strong> — no spread or swap fee. Only network gas applies.
+            </p>
+          </div>
         </section>
 
-        <section className="mb-10">
-          <h2 className="text-lg font-semibold text-sky-300 mb-3">
-            What allowance is and who it applies to
+        {/* Bridge Tab */}
+        <section className="mb-14">
+          <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">5</span>
+            Bridge tab — cross-chain swaps
           </h2>
-          <p className="text-slate-200 text-sm mb-2">
-            When you <strong>sell a token</strong> (e.g. USDT, USDC), the chain requires you to “approve” a contract to spend that token. That permission is called an <strong>allowance</strong>.
-          </p>
-          <ul className="space-y-1.5 text-slate-200 text-sm list-disc list-inside mb-2">
-            <li>The <strong>user</strong> (the swapper) sets the allowance. If a one-time “Approve” is needed, the <strong>user</strong> signs that transaction and pays gas for it (once per token).</li>
-            <li>The app and the app operator do not set or pay for the user’s allowance. The app only shows an “Approve” button when 0x says allowance is required.</li>
-            <li>If the swap fails with “transfer amount exceeds allowance”, it means the user’s allowance was too low; the user needs to approve again (or approve a higher amount) and retry.</li>
-          </ul>
+          <div className="rounded-2xl bg-slate-800/50 border border-slate-700/50 p-6 text-slate-200 space-y-4">
+            <p>
+              Swap tokens <strong className="text-white">across chains</strong> — e.g. USDC on Base → ETH on Arbitrum. Powered by <a href="https://across.to" target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline">Across Protocol</a>.
+            </p>
+            <ul className="space-y-2 text-sm">
+              <li>Select different chains for From and To.</li>
+              <li>Fills typically complete in <strong className="text-white">~2–10 seconds</strong>.</li>
+              <li>You pay gas only on the <strong className="text-white">origin chain</strong>; the bridge handles the rest.</li>
+              <li>Using Ledger? Have it ready — sign within 60 seconds. Quotes expire quickly.</li>
+            </ul>
+            <p className="text-sm text-slate-400">
+              Get a fresh quote right before swapping; we auto-refresh before execution.
+            </p>
+          </div>
         </section>
 
-        <section className="mb-10">
-          <h2 className="text-lg font-semibold text-sky-300 mb-3">
-            Available pairs by chain
+        {/* Fees */}
+        <section className="mb-14">
+          <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">6</span>
+            Fees
           </h2>
-          <p className="text-slate-200 text-sm mb-4">
-            Same-chain swaps only. You can swap between any listed tokens and optionally <strong>receive real native</strong> (ETH, BNB, MATIC) via the “To” dropdown.
-          </p>
-          <div className="rounded-xl bg-slate-800/60 border border-slate-700/50 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-700/50 bg-slate-800/80">
-                  <th className="text-left py-3 px-4 font-medium text-white">Chain</th>
-                  <th className="text-left py-3 px-4 font-medium text-white">Tokens (from/to)</th>
-                  <th className="text-left py-3 px-4 font-medium text-white">Receive as native</th>
-                </tr>
-              </thead>
-              <tbody className="text-slate-200">
-                {CHAINS.map((chain) => (
-                  <tr
-                    key={chain.id}
-                    className="border-b border-slate-700/30 last:border-0"
-                  >
-                    <td className="py-3 px-4 font-medium text-white">{chain.name}</td>
-                    <td className="py-3 px-4">
-                      {(CHAIN_TOKENS[chain.id] ?? []).map((t) => t.symbol).join(", ")}
-                    </td>
-                    <td className="py-3 px-4 text-sky-300">
-                      {NATIVE_BY_CHAIN[chain.id] ?? "-"}
-                    </td>
+          <div className="rounded-2xl bg-slate-800/50 border border-slate-700/50 p-6 text-slate-200 space-y-4">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-600">
+                    <th className="text-left py-3 font-medium text-white">Action</th>
+                    <th className="text-left py-3 font-medium text-white">App fee</th>
+                    <th className="text-left py-3 font-medium text-white">Other</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="text-slate-300">
+                  <tr className="border-b border-slate-700/50">
+                    <td className="py-3">Same-chain swap</td>
+                    <td className="py-3">0.12%</td>
+                    <td className="py-3">Gas if native involved; 0x fee</td>
+                  </tr>
+                  <tr className="border-b border-slate-700/50">
+                    <td className="py-3">Wrap / Unwrap</td>
+                    <td className="py-3">None</td>
+                    <td className="py-3">Network gas only</td>
+                  </tr>
+                  <tr className="border-b border-slate-700/50">
+                    <td className="py-3">Cross-chain bridge</td>
+                    <td className="py-3">0.15%</td>
+                    <td className="py-3">Bridge + gas on origin chain</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-sm text-slate-400">
+              The quote breakdown shows each fee with USD estimates before you confirm.
+            </p>
           </div>
-          <p className="text-xs text-slate-400 mt-3">
-            Any pair between these tokens on the same chain is supported. BNB has no USDC (USDT + WBNB only). You’ll see at confirm time whether the swap is sign-only or requires a transaction (you pay gas).
-          </p>
         </section>
 
-        <section className="mb-10 rounded-xl bg-slate-800/40 border border-slate-700/30 p-4 sm:p-5">
-          <h2 className="text-lg font-semibold text-sky-300 mb-2">
-            Need help?
+        {/* Tokens: Native vs Wrapped */}
+        <section className="mb-14">
+          <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">7</span>
+            Native vs. wrapped tokens
           </h2>
-          <p className="text-sm text-slate-200 mb-2">
+          <div className="rounded-2xl bg-slate-800/50 border border-slate-700/50 p-6 text-slate-200 space-y-4">
+            <p>
+              <strong className="text-white">Native</strong> (ETH, BNB, MATIC) is the chain’s base currency. <strong className="text-white">Wrapped</strong> (WETH, WBNB, WMATIC) is an ERC20 that represents it 1:1.
+            </p>
+            <ul className="space-y-2 text-sm">
+              <li><strong className="text-white">Sending native:</strong> One transaction; you pay gas.</li>
+              <li><strong className="text-white">Sending wrapped:</strong> ERC20 transfer; may be gasless if paired with another ERC20.</li>
+              <li><strong className="text-white">Receiving native:</strong> You get real chain currency. Requires gas for the swap.</li>
+              <li><strong className="text-white">Receiving wrapped:</strong> You get the ERC20. Can be gasless.</li>
+            </ul>
+          </div>
+        </section>
+
+        {/* Allowance */}
+        <section className="mb-14">
+          <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">8</span>
+            Token allowance
+          </h2>
+          <div className="rounded-2xl bg-slate-800/50 border border-slate-700/50 p-6 text-slate-200 space-y-4">
+            <p>
+              When you <strong className="text-white">sell a token</strong> (USDC, USDT, WETH, etc.), the chain requires you to approve a contract to spend it. That permission is called <strong className="text-white">allowance</strong>.
+            </p>
+            <ul className="space-y-2 text-sm">
+              <li>If the app shows <strong className="text-white">Approve</strong>, you must sign that transaction once (you pay gas).</li>
+              <li>After approval, future swaps with that token may be gasless (sign-only).</li>
+              <li>Native (ETH, BNB, MATIC) does not need allowance — you send it directly.</li>
+            </ul>
+          </div>
+        </section>
+
+        {/* Supported chains & tokens */}
+        <section className="mb-14">
+          <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">9</span>
+            Supported chains & tokens
+          </h2>
+          <div className="rounded-2xl bg-slate-800/50 border border-slate-700/50 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-slate-600 bg-slate-800/80">
+                    <th className="text-left py-3 px-4 font-medium text-white">Chain</th>
+                    <th className="text-left py-3 px-4 font-medium text-white">Tokens</th>
+                  </tr>
+                </thead>
+                <tbody className="text-slate-200">
+                  {CHAINS.map((chain) => (
+                    <tr key={chain.id} className="border-b border-slate-700/30 last:border-0">
+                      <td className="py-3 px-4 font-medium text-white">{chain.name}</td>
+                      <td className="py-3 px-4">{(CHAIN_TOKENS[chain.id] ?? []).join(", ")}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-xs text-slate-400 p-4 pt-2">
+              BNB has no USDC (USDT + WBNB only). Any pair between listed tokens on the same chain is supported for Swap. Bridge supports all listed chains.
+            </p>
+          </div>
+        </section>
+
+        {/* Quote flow */}
+        <section className="mb-14">
+          <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">10</span>
+            Quote flow & tips
+          </h2>
+          <div className="rounded-2xl bg-slate-800/50 border border-slate-700/50 p-6 text-slate-200 space-y-4">
+            <ol className="list-decimal list-inside space-y-2 text-sm">
+              <li>Enter amount and select From/To tokens (and chains for Bridge).</li>
+              <li>Click <strong className="text-white">Get quote</strong>. The quote breakdown shows fees, estimated output, and gas.</li>
+              <li>Quotes refresh every 30 seconds and expire after ~30s. For Bridge, get a fresh quote right before swapping.</li>
+              <li>Click <strong className="text-white">Swap</strong> (or Wrap/Unwrap). Approve if prompted, then sign.</li>
+              <li>After success, use <strong className="text-white">View transaction</strong> to check on the explorer, or <strong className="text-white">Next swap</strong> to start over.</li>
+            </ol>
+            <p className="text-sm text-amber-400/90">
+              If a transaction fails on-chain, we’ll show “View failed transaction” and you can retry with a fresh quote.
+            </p>
+          </div>
+        </section>
+
+        {/* Solana */}
+        <section className="mb-14">
+          <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">11</span>
+            Solana swaps
+          </h2>
+          <div className="rounded-2xl bg-slate-800/50 border border-slate-700/50 p-6 text-slate-200 space-y-4">
+            <p>
+              The <Link href="/swap/solana" className="text-sky-400 hover:underline">Solana</Link> page offers swaps on Solana via Jupiter. Connect a Solana wallet (e.g. Phantom) and swap SOL, USDC, USDT.
+            </p>
+            <p className="text-sm text-slate-400">
+              Solana swaps are separate from the EVM Swap/Wrap/Bridge interface.
+            </p>
+          </div>
+        </section>
+
+        {/* Support */}
+        <section className="mb-12 rounded-2xl bg-slate-800/40 border border-slate-700/40 p-6">
+          <h2 className="text-lg font-semibold text-white mb-2">Need help?</h2>
+          <p className="text-slate-200 text-sm mb-3">
             Questions or issues? Reach out on Telegram.
           </p>
           <a
             href="https://t.me/brandonxbxgh"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-sky-400 hover:text-sky-300 font-medium text-sm"
+            className="inline-flex items-center gap-2 text-sky-400 hover:text-sky-300 font-medium text-sm"
           >
-            t.me/brandonxbxgh →
+            t.me/brandonxbxgh
+            <span aria-hidden>→</span>
           </a>
         </section>
 
         <p className="text-center">
           <Link
             href="/"
-            className="inline-flex items-center justify-center rounded-xl bg-sky-500 hover:bg-sky-400 px-5 py-2.5 text-sm font-medium text-white transition-colors"
+            className="inline-flex items-center justify-center rounded-xl bg-[var(--swap-accent)] hover:opacity-90 px-6 py-3 text-sm font-medium text-white transition-colors"
           >
             Back to Swap
           </Link>
