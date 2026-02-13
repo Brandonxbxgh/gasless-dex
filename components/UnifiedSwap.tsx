@@ -138,6 +138,8 @@ export function UnifiedSwap() {
   const [swapping, setSwapping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [txChainId, setTxChainId] = useState<number | null>(null);
+  const [completedAction, setCompletedAction] = useState<"wrap" | "unwrap" | "swap" | "bridge" | null>(null);
   const [needsManualApproval, setNeedsManualApproval] = useState(false);
   const [approvingInProgress, setApprovingInProgress] = useState(false);
   const [inputTokenPriceUsd, setInputTokenPriceUsd] = useState<number | null>(null);
@@ -236,6 +238,19 @@ export function UnifiedSwap() {
 
   const hasQuote = !!(quote || swapQuote || acrossQuote);
   const canExecute = hasQuote || isWrap || isUnwrap;
+
+  const resetForNextAction = useCallback(() => {
+    setTxHash(null);
+    setTxChainId(null);
+    setCompletedAction(null);
+    setError(null);
+    setAmount("");
+    setQuote(null);
+    setSwapQuote(null);
+    setAcrossQuote(null);
+    setQuoteReceivedAt(null);
+    setNeedsManualApproval(false);
+  }, []);
 
   const handleMax = useCallback(() => {
     if (inputBalanceFormatted && parseFloat(inputBalanceFormatted) > 0) {
@@ -416,6 +431,8 @@ export function UnifiedSwap() {
           value: amountWei,
         });
         setTxHash(hash);
+        setTxChainId(fromChainId);
+        setCompletedAction("wrap");
         if (publicClient) await publicClient.waitForTransactionReceipt({ hash });
         addToHistory({ chainId: fromChainId, chainName: CHAIN_NAME[fromChainId], txHash: hash, sellSymbol: inputToken.symbol, buySymbol: outputToken.symbol, sellAmount: amount, buyAmount: amount });
         setAmount("");
@@ -431,6 +448,8 @@ export function UnifiedSwap() {
           args: [amountWei],
         });
         setTxHash(hash);
+        setTxChainId(fromChainId);
+        setCompletedAction("unwrap");
         if (publicClient) await publicClient.waitForTransactionReceipt({ hash });
         addToHistory({ chainId: fromChainId, chainName: CHAIN_NAME[fromChainId], txHash: hash, sellSymbol: inputToken.symbol, buySymbol: outputToken.symbol, sellAmount: amount, buyAmount: amount });
         setAmount("");
@@ -442,49 +461,63 @@ export function UnifiedSwap() {
         if (swapQuote.issues?.allowance && !isInputNative) {
           const approveHash = await walletClient.writeContract({ address: sellAddr, abi: ERC20_APPROVE_ABI, functionName: "approve", args: [spender, maxUint256] });
           if (publicClient) await publicClient.waitForTransactionReceipt({ hash: approveHash });
-          const fresh = await getSwapQuote({
-            chainId: fromChainId, sellToken: sellAddr, buyToken: (isOutputNative ? NATIVE_TOKEN_ADDRESS : outputToken.address) as `0x${string}`,
-            sellAmount: swapQuote.sellAmount, taker: address, swapFeeBps: SWAP_FEE_BPS, swapFeeRecipient: SWAP_FEE_RECIPIENT, swapFeeToken: outputToken.address as `0x${string}`, tradeSurplusRecipient: SWAP_FEE_RECIPIENT, slippageBps: 100,
-          });
-          if (!fresh?.transaction) { setError("Quote expired"); setSwapping(false); return; }
-          setSwapQuote(fresh);
         }
-        const tx = (swapQuote.transaction ?? (await getSwapQuote({ chainId: fromChainId, sellToken: sellAddr, buyToken: (isOutputNative ? NATIVE_TOKEN_ADDRESS : outputToken.address) as `0x${string}`, sellAmount: swapQuote.sellAmount, taker: address, swapFeeBps: SWAP_FEE_BPS, swapFeeRecipient: SWAP_FEE_RECIPIENT, swapFeeToken: outputToken.address as `0x${string}`, tradeSurplusRecipient: SWAP_FEE_RECIPIENT, slippageBps: 100 })).transaction);
+        const fresh = await getSwapQuote({
+          chainId: fromChainId, sellToken: sellAddr, buyToken: (isOutputNative ? NATIVE_TOKEN_ADDRESS : outputToken.address) as `0x${string}`,
+          sellAmount: swapQuote.sellAmount, taker: address, swapFeeBps: SWAP_FEE_BPS, swapFeeRecipient: SWAP_FEE_RECIPIENT, swapFeeToken: outputToken.address as `0x${string}`, tradeSurplusRecipient: SWAP_FEE_RECIPIENT, slippageBps: 100,
+        });
+        if (!fresh?.transaction) { setError("Quote expired — get a fresh quote and try again"); setSwapping(false); return; }
+        setSwapQuote(fresh);
+        setQuoteReceivedAt(Date.now());
+        const tx = fresh.transaction;
         const gasParams = tx?.gas && tx?.gasPrice
           ? { gas: BigInt(tx.gas), gasPrice: BigInt(tx.gasPrice) }
           : tx?.maxFeePerGas && tx?.maxPriorityFeePerGas
             ? { maxFeePerGas: BigInt(tx.maxFeePerGas), maxPriorityFeePerGas: BigInt(tx.maxPriorityFeePerGas) }
             : {};
         const hash = await walletClient.sendTransaction({
-          to: tx!.to as `0x${string}`,
-          data: tx!.data as `0x${string}`,
-          value: BigInt(tx!.value || 0),
+          to: tx.to as `0x${string}`,
+          data: tx.data as `0x${string}`,
+          value: BigInt(tx.value || 0),
           ...gasParams,
         });
         setTxHash(hash);
+        setTxChainId(fromChainId);
+        setCompletedAction("swap");
         if (publicClient) await publicClient.waitForTransactionReceipt({ hash });
         addToHistory({
           chainId: fromChainId, chainName: CHAIN_NAME[fromChainId], txHash: hash,
           sellSymbol: inputToken.symbol, buySymbol: outputToken.symbol,
-          sellAmount: formatUnits(BigInt(swapQuote.sellAmount), inputToken.decimals),
-          buyAmount: formatUnits(BigInt(swapQuote.buyAmount), getTokenDecimals(outputToken.symbol, fromChainId)),
+          sellAmount: formatUnits(BigInt(fresh.sellAmount), inputToken.decimals),
+          buyAmount: formatUnits(BigInt(fresh.buyAmount), getTokenDecimals(outputToken.symbol, fromChainId)),
         });
         setAmount("");
         setSwapQuote(null);
       } else if (quote) {
-        const tokenApprovalRequired = quote.issues?.allowance != null;
-        const gaslessApprovalAvailable = quote.approval != null;
+        const amountWei = parseUnits(amount, inputToken.decimals).toString();
+        const sellAddr = (isInputNative ? NATIVE_TOKEN_ADDRESS : inputToken.address) as `0x${string}`;
+        const buyAddr = (isOutputNative ? NATIVE_TOKEN_ADDRESS : outputToken.address) as `0x${string}`;
+        const fresh = await getGaslessQuote({
+          chainId: fromChainId, sellToken: sellAddr, buyToken: buyAddr, sellAmount: amountWei,
+          taker: address, swapFeeBps: SWAP_FEE_BPS, swapFeeRecipient: SWAP_FEE_RECIPIENT,
+          swapFeeToken: outputToken.address as `0x${string}`, tradeSurplusRecipient: SWAP_FEE_RECIPIENT, slippageBps: 100,
+        });
+        if (!fresh?.liquidityAvailable) { setError("Quote expired — get a fresh quote and try again"); setSwapping(false); return; }
+        setQuote(fresh);
+        setQuoteReceivedAt(Date.now());
+        const tokenApprovalRequired = fresh.issues?.allowance != null;
+        const gaslessApprovalAvailable = fresh.approval != null;
         let approvalData: SignedApprovalData | null = null;
-        if (tokenApprovalRequired && gaslessApprovalAvailable && quote.approval) {
+        if (tokenApprovalRequired && gaslessApprovalAvailable && fresh.approval) {
           const sig = await walletClient.signTypedData({
             account: address,
-            domain: quote.approval.eip712.domain,
-            types: quote.approval.eip712.types as Record<string, { name: string; type: string }[]>,
-            primaryType: quote.approval.eip712.primaryType,
-            message: quote.approval.eip712.message,
+            domain: fresh.approval.eip712.domain,
+            types: fresh.approval.eip712.types as Record<string, { name: string; type: string }[]>,
+            primaryType: fresh.approval.eip712.primaryType,
+            message: fresh.approval.eip712.message,
           });
           const split = splitSignature(sig as `0x${string}`);
-          approvalData = { type: quote.approval.type, eip712: quote.approval.eip712, signature: { ...split, signatureType: SignatureType.EIP712 } };
+          approvalData = { type: fresh.approval.type, eip712: fresh.approval.eip712, signature: { ...split, signatureType: SignatureType.EIP712 } };
         } else if (tokenApprovalRequired && !gaslessApprovalAvailable) {
           setNeedsManualApproval(true);
           setError("Approve token first, then try again.");
@@ -493,14 +526,14 @@ export function UnifiedSwap() {
         }
         const tradeSig = await walletClient.signTypedData({
           account: address,
-          domain: quote.trade.eip712.domain,
-          types: quote.trade.eip712.types as Record<string, { name: string; type: string }[]>,
-          primaryType: quote.trade.eip712.primaryType,
-          message: quote.trade.eip712.message,
+          domain: fresh.trade.eip712.domain,
+          types: fresh.trade.eip712.types as Record<string, { name: string; type: string }[]>,
+          primaryType: fresh.trade.eip712.primaryType,
+          message: fresh.trade.eip712.message,
         });
         const tradeSplit = splitSignature(tradeSig as `0x${string}`);
         const { tradeHash: th } = await submitGaslessSwap({
-          trade: { type: quote.trade.type, eip712: quote.trade.eip712, signature: { ...tradeSplit, signatureType: SignatureType.EIP712 } },
+          trade: { type: fresh.trade.type, eip712: fresh.trade.eip712, signature: { ...tradeSplit, signatureType: SignatureType.EIP712 } },
           approval: approvalData ?? undefined,
           chainId: fromChainId,
         });
@@ -508,7 +541,9 @@ export function UnifiedSwap() {
         for (let i = 0; i < 20 && st.status !== "confirmed"; i++) { await new Promise((r) => setTimeout(r, 2000)); st = await getGaslessStatus(th, fromChainId); }
         if (st.transactionHash) {
           setTxHash(st.transactionHash);
-          addToHistory({ chainId: fromChainId, chainName: CHAIN_NAME[fromChainId], txHash: st.transactionHash, tradeHash: th, sellSymbol: inputToken.symbol, buySymbol: outputToken.symbol, sellAmount: formatUnits(BigInt(quote.sellAmount), inputToken.decimals), buyAmount: formatUnits(BigInt(quote.buyAmount), getTokenDecimals(outputToken.symbol, fromChainId)) });
+          setTxChainId(fromChainId);
+          setCompletedAction("swap");
+          addToHistory({ chainId: fromChainId, chainName: CHAIN_NAME[fromChainId], txHash: st.transactionHash, tradeHash: th, sellSymbol: inputToken.symbol, buySymbol: outputToken.symbol, sellAmount: formatUnits(BigInt(fresh.sellAmount), inputToken.decimals), buyAmount: formatUnits(BigInt(fresh.buyAmount), getTokenDecimals(outputToken.symbol, fromChainId)) });
         }
         setAmount("");
         setQuote(null);
@@ -534,13 +569,44 @@ export function UnifiedSwap() {
         await switchChain({ chainId: fromChainId });
         await new Promise((r) => setTimeout(r, 1000));
       }
-      if (acrossQuote.approvalTxns?.length) {
-        for (const a of acrossQuote.approvalTxns) {
+      const amountWei = parseUnits(amount, inputToken.decimals).toString();
+      const inputAddr = isInputNative ? WRAPPED_BY_CHAIN[fromChainId] : inputToken.address;
+      const outputAddr = isOutputNative ? WRAPPED_BY_CHAIN[toChainId] : outputToken.address;
+      const res = await fetch(
+        `/api/across-quote?tradeType=exactInput&amount=${amountWei}&inputToken=${inputAddr}&outputToken=${outputAddr}&originChainId=${fromChainId}&destinationChainId=${toChainId}&depositor=${address}`
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Quote failed");
+      const bridge = data.steps?.bridge;
+      const swapTx = data.swapTx ?? bridge?.swapTx;
+      const expectedOutputAmount = data.expectedOutputAmount ?? bridge?.expectedOutputAmount;
+      const outputTokenInfo = data.outputToken ?? bridge?.tokenOut;
+      const fees = data.fees ?? (bridge?.fees?.totalRelay ? {
+        total: { amount: bridge.fees.totalRelay.total, token: bridge.tokenOut ?? { decimals: 18, symbol: "ETH" } },
+        originGas: bridge.fees.relayerGas ? { amount: bridge.fees.relayerGas.total } : undefined,
+      } : undefined);
+      const freshQuote = {
+        approvalTxns: data.approvalTxns,
+        swapTx,
+        expectedOutputAmount,
+        outputToken: outputTokenInfo ? { decimals: outputTokenInfo.decimals ?? 18 } : undefined,
+        fees,
+        quoteExpiryTimestamp: data.quoteExpiryTimestamp ?? (Date.now() + 30000),
+      };
+      if (!swapTx?.to || !swapTx?.data) {
+        setError("Quote expired — get a fresh quote and try again");
+        setSwapping(false);
+        return;
+      }
+      setAcrossQuote(freshQuote);
+      setQuoteReceivedAt(Date.now());
+      if (freshQuote.approvalTxns?.length) {
+        for (const a of freshQuote.approvalTxns) {
           const h = await walletClient.sendTransaction({ to: a.to as `0x${string}`, data: a.data as `0x${string}`, value: a.value ? BigInt(a.value) : undefined });
           if (publicClient) await publicClient.waitForTransactionReceipt({ hash: h });
         }
       }
-      const s = acrossQuote.swapTx;
+      const s = freshQuote.swapTx;
       const gasParams =
         estimatedGasWei != null && gasPriceWei != null
           ? { gas: (estimatedGasWei * BigInt(120)) / BigInt(100), gasPrice: gasPriceWei }
@@ -554,6 +620,8 @@ export function UnifiedSwap() {
         ...gasParams,
       });
       setTxHash(hash);
+      setTxChainId(fromChainId);
+      setCompletedAction("bridge");
       setAmount("");
       setAcrossQuote(null);
     } catch (e) {
@@ -561,7 +629,7 @@ export function UnifiedSwap() {
     } finally {
       setSwapping(false);
     }
-  }, [acrossQuote, walletClient, address, publicClient, needsChainSwitch, switchChain, fromChainId, estimatedGasWei, gasPriceWei]);
+  }, [acrossQuote, walletClient, address, publicClient, needsChainSwitch, switchChain, fromChainId, toChainId, amount, inputToken, outputToken, isInputNative, isOutputNative, estimatedGasWei, gasPriceWei]);
 
   const execute = useCallback(() => {
     if (isSameChain) executeSameChain();
@@ -826,6 +894,34 @@ export function UnifiedSwap() {
           {error && <p className="text-red-400 text-sm">{error}</p>}
 
           <div className="flex flex-col gap-2">
+            {txHash ? (
+              <>
+                <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/30 p-4 text-center">
+                  <p className="text-emerald-400 font-semibold text-lg">
+                    {completedAction === "wrap" && "Wrap complete"}
+                    {completedAction === "unwrap" && "Unwrap complete"}
+                    {completedAction === "swap" && "Swap complete"}
+                    {completedAction === "bridge" && "Bridge complete"}
+                    {!completedAction && "Complete"}
+                  </p>
+                </div>
+                <a
+                  href={`${EXPLORER_URL[txChainId ?? fromChainId] ?? "https://basescan.org"}/tx/${txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3 rounded-2xl bg-[#2d2d3d] hover:bg-[#3d3d4d] text-sky-400 font-semibold text-base text-center border border-sky-500/30"
+                >
+                  View transaction
+                </a>
+                <button
+                  onClick={resetForNextAction}
+                  className="w-full py-4 rounded-2xl bg-[var(--swap-accent)] hover:opacity-90 text-white font-semibold text-base"
+                >
+                  Next swap
+                </button>
+              </>
+            ) : (
+              <>
             {!(isWrap || isUnwrap) && (
               <button
                 onClick={fetchQuote}
@@ -951,13 +1047,9 @@ export function UnifiedSwap() {
                 {approvingInProgress ? "Check wallet" : `Approve ${inputToken.symbol}`}
               </button>
             )}
+              </>
+            )}
           </div>
-
-          {txHash && (
-            <a href={`${EXPLORER_URL[fromChainId] ?? "https://basescan.org"}/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="block text-center text-sm text-sky-400 hover:underline">
-              View transaction
-            </a>
-          )}
 
           <p className="text-xs text-slate-500 text-center mt-4">
             {isSameChain ? "Same-chain swaps use 0x. Wrap/unwrap is 1:1." : "Cross-chain swaps take ~2-10 seconds. Gas on origin chain only."}
