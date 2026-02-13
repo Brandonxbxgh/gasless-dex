@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 const CHAIN_TO_PLATFORM: Record<string, string> = {
   "1": "ethereum",
+  "10": "optimistic-ethereum",
   "56": "binance-smart-chain",
   "137": "polygon-pos",
   "42161": "arbitrum-one",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useAccount, useChainId, useSwitchChain, useWalletClient, usePublicClient, useDisconnect, useReadContract, useBalance } from "wagmi";
 import { parseUnits, formatUnits, isAddress, maxUint256 } from "viem";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
@@ -129,6 +129,8 @@ export function UnifiedSwap() {
   const [txHash, setTxHash] = useState<string | null>(null);
   const [needsManualApproval, setNeedsManualApproval] = useState(false);
   const [approvingInProgress, setApprovingInProgress] = useState(false);
+  const [inputTokenPriceUsd, setInputTokenPriceUsd] = useState<number | null>(null);
+  const [outputTokenPriceUsd, setOutputTokenPriceUsd] = useState<number | null>(null);
 
   const isSameChain = fromChainId === toChainId;
   const needsChainSwitch = isConnected && chainId !== fromChainId;
@@ -139,6 +141,30 @@ export function UnifiedSwap() {
   const isOutputNative = outputToken.address === NATIVE_TOKEN;
   const isWrap = isSameChain && isInputNative && !isOutputNative && outputToken.symbol.startsWith("W");
   const isUnwrap = isSameChain && !isInputNative && inputToken.symbol.startsWith("W") && isOutputNative;
+
+  const inputPriceAddr = isInputNative ? WRAPPED_BY_CHAIN[fromChainId] : inputToken.address;
+  const outputPriceAddr = isOutputNative ? WRAPPED_BY_CHAIN[toChainId] : outputToken.address;
+
+  useEffect(() => {
+    if (!inputPriceAddr) return;
+    fetch(`/api/token-price?chainId=${fromChainId}&address=${encodeURIComponent(inputPriceAddr)}`)
+      .then((r) => r.json())
+      .then((d: { usd?: number | null }) => setInputTokenPriceUsd(typeof d?.usd === "number" ? d.usd : null))
+      .catch(() => setInputTokenPriceUsd(null));
+  }, [fromChainId, inputPriceAddr]);
+
+  useEffect(() => {
+    if (!outputPriceAddr) return;
+    fetch(`/api/token-price?chainId=${toChainId}&address=${encodeURIComponent(outputPriceAddr)}`)
+      .then((r) => r.json())
+      .then((d: { usd?: number | null }) => setOutputTokenPriceUsd(typeof d?.usd === "number" ? d.usd : null))
+      .catch(() => setOutputTokenPriceUsd(null));
+  }, [toChainId, outputPriceAddr]);
+
+  const inputUsdValue = useMemo(() => {
+    if (!amount || parseFloat(amount) <= 0 || inputTokenPriceUsd == null) return null;
+    return parseFloat(amount) * inputTokenPriceUsd;
+  }, [amount, inputTokenPriceUsd]);
 
   const inputTokenForBalance = isInputNative ? undefined : (inputToken.address as `0x${string}`);
   const { data: inputBalanceRaw } = useReadContract({
@@ -180,8 +206,32 @@ export function UnifiedSwap() {
     return "0";
   }, [isWrap, isUnwrap, amount, acrossQuote, quote, swapQuote, outputToken.symbol, toChainId]);
 
+  const outputUsdValue = useMemo(() => {
+    if (!outputAmount || parseFloat(outputAmount) <= 0 || outputTokenPriceUsd == null) return null;
+    return parseFloat(outputAmount) * outputTokenPriceUsd;
+  }, [outputAmount, outputTokenPriceUsd]);
+
   const hasQuote = !!(quote || swapQuote || acrossQuote);
   const canExecute = hasQuote || isWrap || isUnwrap;
+
+  const quoteRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const fetchQuoteRef = useRef(fetchQuote);
+  fetchQuoteRef.current = fetchQuote;
+  useEffect(() => {
+    if (!hasQuote || isWrap || isUnwrap) {
+      if (quoteRefreshRef.current) {
+        clearInterval(quoteRefreshRef.current);
+        quoteRefreshRef.current = null;
+      }
+      return;
+    }
+    quoteRefreshRef.current = setInterval(() => {
+      fetchQuoteRef.current();
+    }, 30000);
+    return () => {
+      if (quoteRefreshRef.current) clearInterval(quoteRefreshRef.current);
+    };
+  }, [hasQuote, isWrap, isUnwrap]);
 
   const handleMax = useCallback(() => {
     if (inputBalanceFormatted && parseFloat(inputBalanceFormatted) > 0) {
@@ -405,22 +455,52 @@ export function UnifiedSwap() {
     else executeCrossChain();
   }, [isSameChain, executeSameChain, executeCrossChain]);
 
-  const primaryAction = useMemo(() => {
-    if (isWrap) return "Wrap";
-    if (isUnwrap) return "Unwrap";
-    if (hasQuote) return "Swap";
-    return "Get quote";
-  }, [isWrap, isUnwrap, hasQuote]);
+  const quoteBreakdown = useMemo(() => {
+    if (swapQuote) {
+      const sources = swapQuote.route?.fills?.map((f) => f.source).filter(Boolean) ?? [];
+      const gasWei = swapQuote.transaction?.gas && swapQuote.transaction?.gasPrice
+        ? BigInt(swapQuote.transaction.gas) * BigInt(swapQuote.transaction.gasPrice)
+        : swapQuote.totalNetworkFee ? BigInt(swapQuote.totalNetworkFee) : null;
+      const feeItems: { label: string; value: string }[] = [];
+      if (swapQuote.fees?.integratorFee?.amount) {
+        const dec = getTokenDecimals(outputToken.symbol, fromChainId);
+        feeItems.push({ label: "App fee (0.1%)", value: `${formatUnits(BigInt(swapQuote.fees.integratorFee.amount), dec)} ${outputToken.symbol}` });
+      }
+      if (swapQuote.fees?.zeroExFee?.amount) {
+        const dec = getTokenDecimals(outputToken.symbol, fromChainId);
+        feeItems.push({ label: "0x fee", value: `${formatUnits(BigInt(swapQuote.fees.zeroExFee.amount), dec)} ${outputToken.symbol}` });
+      }
+      return { type: "swap" as const, sources, gasWei, feeItems };
+    }
+    if (quote) {
+      const fills = (quote.route?.fills ?? []) as { source?: string }[];
+      const sources = fills.map((f) => f.source).filter(Boolean);
+      const feeItems: { label: string; value: string }[] = [];
+      if (quote.fees?.integratorFee?.amount) {
+        const dec = getTokenDecimals(outputToken.symbol, fromChainId);
+        feeItems.push({ label: "App fee (0.1%)", value: `${formatUnits(BigInt(quote.fees.integratorFee.amount), dec)} ${outputToken.symbol}` });
+      }
+      return { type: "gasless" as const, sources, gasWei: null, feeItems };
+    }
+    if (acrossQuote) {
+      return { type: "crosschain" as const, sources: ["Across"], gasWei: null, feeItems: [] };
+    }
+    return null;
+  }, [swapQuote, quote, acrossQuote, outputToken.symbol, fromChainId]);
 
-  const isPrimaryDisabled = useMemo(() => {
+  const isGetQuoteDisabled = useMemo(() => {
     if (!amount || parseFloat(amount) <= 0) return true;
     if (loading || swapping) return true;
-    if (isSameChain && !isWrap && !isUnwrap && !hasQuote) return false;
-    if (isSameChain && (isWrap || isUnwrap)) return false;
-    if (isSameChain && hasQuote) return false;
-    if (!isSameChain && !hasQuote) return false;
+    if (isWrap || isUnwrap) return true;
     return false;
-  }, [amount, loading, swapping, isSameChain, isWrap, isUnwrap, hasQuote]);
+  }, [amount, loading, swapping, isWrap, isUnwrap]);
+
+  const isSwapDisabled = useMemo(() => {
+    if (!hasQuote || isWrap || isUnwrap) return true;
+    if (loading || swapping) return true;
+    if (needsChainSwitch) return true;
+    return false;
+  }, [hasQuote, isWrap, isUnwrap, loading, swapping, needsChainSwitch]);
 
   return (
     <div className="w-full max-w-md mx-auto rounded-3xl border p-6 sm:p-8 bg-[var(--delta-card)] border-[var(--swap-pill-border)] shadow-xl">
@@ -494,6 +574,9 @@ export function UnifiedSwap() {
                 <span className="text-xs text-slate-500">Balance: {parseFloat(inputBalanceFormatted).toLocaleString("en-US", { maximumFractionDigits: 6 })} {inputToken.symbol}</span>
               )}
             </div>
+            {inputUsdValue != null && inputUsdValue > 0 && (
+              <p className="text-xs text-slate-400 mt-1">≈ ${inputUsdValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</p>
+            )}
           </div>
 
           <div>
@@ -535,6 +618,9 @@ export function UnifiedSwap() {
             {outputBalanceFormatted != null && (
               <p className="text-xs text-slate-500 mt-1">Balance: {parseFloat(outputBalanceFormatted).toLocaleString("en-US", { maximumFractionDigits: 6 })} {outputToken.symbol}</p>
             )}
+            {outputUsdValue != null && outputUsdValue > 0 && (
+              <p className="text-xs text-slate-400 mt-1">≈ ${outputUsdValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</p>
+            )}
           </div>
 
           {needsChainSwitch && (
@@ -553,13 +639,67 @@ export function UnifiedSwap() {
           {error && <p className="text-red-400 text-sm">{error}</p>}
 
           <div className="flex flex-col gap-2">
-            <button
-              onClick={primaryAction === "Get quote" ? fetchQuote : execute}
-              disabled={isPrimaryDisabled || (primaryAction !== "Get quote" && needsChainSwitch)}
-              className="w-full py-4 rounded-2xl bg-[#2d2d3d] hover:bg-[#3d3d4d] disabled:opacity-50 disabled:cursor-not-allowed text-[var(--swap-accent)] font-semibold text-base"
-            >
-              {loading ? "Getting quote..." : swapping ? "Swapping..." : primaryAction}
-            </button>
+            {!(isWrap || isUnwrap) && (
+              <button
+                onClick={fetchQuote}
+                disabled={isGetQuoteDisabled}
+                className="w-full py-3 rounded-2xl bg-[#2d2d3d] hover:bg-[#3d3d4d] disabled:opacity-50 disabled:cursor-not-allowed text-[var(--swap-accent)] font-semibold text-base"
+              >
+                {loading ? "Getting quote..." : "Get quote"}
+              </button>
+            )}
+
+            {(isWrap || isUnwrap) && (
+              <button
+                onClick={execute}
+                disabled={!amount || parseFloat(amount) <= 0 || swapping || needsChainSwitch}
+                className="w-full py-4 rounded-2xl bg-[#2d2d3d] hover:bg-[#3d3d4d] disabled:opacity-50 disabled:cursor-not-allowed text-[var(--swap-accent)] font-semibold text-base"
+              >
+                {swapping ? "Swapping..." : isWrap ? "Wrap" : "Unwrap"}
+              </button>
+            )}
+
+            {hasQuote && quoteBreakdown && !isWrap && !isUnwrap && (
+              <div className="rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] p-4 space-y-2">
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">Quote breakdown</p>
+                {quoteBreakdown.sources.length > 0 && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500">Route:</span>
+                    <span className="text-sm text-white">{quoteBreakdown.sources.join(" → ")}</span>
+                  </div>
+                )}
+                {quoteBreakdown.feeItems.map((f) => (
+                  <div key={f.label} className="flex justify-between text-sm">
+                    <span className="text-slate-500">{f.label}</span>
+                    <span className="text-white">{f.value}</span>
+                  </div>
+                ))}
+                {quoteBreakdown.gasWei != null && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Est. gas</span>
+                    <span className="text-white">~{formatUnits(quoteBreakdown.gasWei, 18)} {fromChainId === 137 ? "MATIC" : fromChainId === 56 ? "BNB" : "ETH"}</span>
+                  </div>
+                )}
+                {quoteBreakdown.type === "gasless" && (
+                  <p className="text-xs text-emerald-400">Gasless — no gas to pay</p>
+                )}
+                {quoteBreakdown.type === "crosschain" && (
+                  <p className="text-xs text-slate-500">Gas on origin chain only</p>
+                )}
+                <p className="text-xs text-slate-500 pt-1">Quote refreshes every 30s</p>
+              </div>
+            )}
+
+            {hasQuote && !isWrap && !isUnwrap && (
+              <button
+                onClick={execute}
+                disabled={isSwapDisabled}
+                className="w-full py-4 rounded-2xl bg-[var(--swap-accent)] hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-base"
+              >
+                {swapping ? "Swapping..." : "Swap"}
+              </button>
+            )}
+
             {needsManualApproval && quote?.issues?.allowance && (
               <button
                 onClick={async () => {

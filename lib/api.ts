@@ -141,6 +141,11 @@ export interface SwapQuoteResponse {
     zeroExFee?: { amount: string; token: string; type: string };
     gasFee?: { amount: string; token: string; type: string };
   };
+  route?: {
+    fills?: { source?: string; from?: string; to?: string; proportionBps?: string }[];
+    tokens?: { address: string; symbol: string }[];
+  };
+  totalNetworkFee?: string;
   issues?: {
     allowance?: { actual: string; spender: string };
     balance?: { token: string; actual: string; expected: string };
