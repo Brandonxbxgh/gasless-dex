@@ -298,7 +298,8 @@ export function UnifiedSwap() {
         const spender = (swapQuote.allowanceTarget || swapQuote.issues?.allowance?.spender || swapQuote.transaction.to) as `0x${string}`;
         const sellAddr = inputToken.address as `0x${string}`;
         if (swapQuote.issues?.allowance && !isInputNative) {
-          await walletClient.writeContract({ address: sellAddr, abi: ERC20_APPROVE_ABI, functionName: "approve", args: [spender, maxUint256] });
+          const approveHash = await walletClient.writeContract({ address: sellAddr, abi: ERC20_APPROVE_ABI, functionName: "approve", args: [spender, maxUint256] });
+          if (publicClient) await publicClient.waitForTransactionReceipt({ hash: approveHash });
           const fresh = await getSwapQuote({
             chainId: fromChainId, sellToken: sellAddr, buyToken: (isOutputNative ? NATIVE_TOKEN_ADDRESS : outputToken.address) as `0x${string}`,
             sellAmount: swapQuote.sellAmount, taker: address, swapFeeBps: SWAP_FEE_BPS, swapFeeRecipient: SWAP_FEE_RECIPIENT, swapFeeToken: outputToken.address as `0x${string}`, tradeSurplusRecipient: SWAP_FEE_RECIPIENT, slippageBps: 100,
@@ -361,7 +362,12 @@ export function UnifiedSwap() {
         setQuote(null);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Swap failed");
+      const msg = e instanceof Error ? e.message : "Swap failed";
+      if (msg.toLowerCase().includes("reject") || msg.toLowerCase().includes("declined")) {
+        setError("Transaction was rejected. If your wallet showed \"could not load rate fees\", approve the token first (click Approve if shown), get a fresh quote, then try again.");
+      } else {
+        setError(msg);
+      }
     } finally {
       setSwapping(false);
     }
@@ -558,13 +564,15 @@ export function UnifiedSwap() {
               <button
                 onClick={async () => {
                   setApprovingInProgress(true);
+                  setError(null);
                   try {
-                    await walletClient?.writeContract({
+                    const approveHash = await walletClient?.writeContract({
                       address: inputToken.address as `0x${string}`,
                       abi: ERC20_APPROVE_ABI,
                       functionName: "approve",
                       args: [(quote?.issues?.allowance?.spender ?? ALLOWANCE_HOLDER) as `0x${string}`, maxUint256],
                     });
+                    if (approveHash && publicClient) await publicClient.waitForTransactionReceipt({ hash: approveHash });
                     setNeedsManualApproval(false);
                     execute();
                   } catch (e) {
