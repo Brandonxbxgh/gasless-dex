@@ -241,8 +241,10 @@ export function UnifiedSwap() {
         }
       } else {
         const amountWei = parseUnits(amount, inputToken.decimals).toString();
+        const inputAddr = isInputNative ? WRAPPED_BY_CHAIN[fromChainId] : inputToken.address;
+        const outputAddr = isOutputNative ? WRAPPED_BY_CHAIN[toChainId] : outputToken.address;
         const res = await fetch(
-          `/api/across-quote?tradeType=exactInput&amount=${amountWei}&inputToken=${inputToken.address}&outputToken=${outputToken.address}&originChainId=${fromChainId}&destinationChainId=${toChainId}&depositor=${address}`
+          `/api/across-quote?tradeType=exactInput&amount=${amountWei}&inputToken=${inputAddr}&outputToken=${outputAddr}&originChainId=${fromChainId}&destinationChainId=${toChainId}&depositor=${address}`
         );
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error || "Quote failed");
@@ -530,7 +532,16 @@ export function UnifiedSwap() {
           </div>
 
           {needsChainSwitch && (
-            <p className="text-amber-400 text-xs">Switch to {CHAINS.find((c) => c.id === fromChainId)?.name} to execute</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-amber-400 text-xs">Switch to {CHAINS.find((c) => c.id === fromChainId)?.name} to execute</p>
+              <button
+                type="button"
+                onClick={() => switchChain?.({ chainId: fromChainId })}
+                className="text-xs font-medium text-[var(--swap-accent)] hover:opacity-80 px-3 py-1.5 rounded-lg border border-[var(--swap-accent)]/50"
+              >
+                Switch network
+              </button>
+            </div>
           )}
 
           {error && <p className="text-red-400 text-sm">{error}</p>}
