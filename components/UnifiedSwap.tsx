@@ -550,7 +550,7 @@ export function UnifiedSwap() {
                       address: inputToken.address as `0x${string}`,
                       abi: ERC20_APPROVE_ABI,
                       functionName: "approve",
-                      args: [(quote.issues.allowance.spender ?? ALLOWANCE_HOLDER) as `0x${string}`, maxUint256],
+                      args: [(quote?.issues?.allowance?.spender ?? ALLOWANCE_HOLDER) as `0x${string}`, maxUint256],
                     });
                     setNeedsManualApproval(false);
                     execute();
