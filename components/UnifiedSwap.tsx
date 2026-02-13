@@ -146,15 +146,17 @@ export function UnifiedSwap() {
     abi: ERC20_APPROVE_ABI,
     functionName: "balanceOf",
     args: address ? [address] : undefined,
+    chainId: fromChainId,
   });
-  const { data: nativeBalance } = useBalance({ address: isInputNative ? address : undefined });
+  const { data: nativeBalance } = useBalance({ address: isInputNative ? address : undefined, chainId: fromChainId });
   const { data: outputBalanceRaw } = useReadContract({
     address: isOutputNative ? undefined : (outputToken.address as `0x${string}`),
     abi: ERC20_APPROVE_ABI,
     functionName: "balanceOf",
     args: address ? [address] : undefined,
+    chainId: toChainId,
   });
-  const { data: outputNativeBalance } = useBalance({ address: isOutputNative ? address : undefined });
+  const { data: outputNativeBalance } = useBalance({ address: isOutputNative ? address : undefined, chainId: toChainId });
 
   const inputBalanceFormatted = useMemo(() => {
     if (isInputNative && nativeBalance?.value != null) return formatUnits(nativeBalance.value, 18);
@@ -536,7 +538,7 @@ export function UnifiedSwap() {
           <div className="flex flex-col gap-2">
             <button
               onClick={primaryAction === "Get quote" ? fetchQuote : execute}
-              disabled={isPrimaryDisabled || needsChainSwitch}
+              disabled={isPrimaryDisabled || (primaryAction !== "Get quote" && needsChainSwitch)}
               className="w-full py-4 rounded-2xl bg-[#2d2d3d] hover:bg-[#3d3d4d] disabled:opacity-50 disabled:cursor-not-allowed text-[var(--swap-accent)] font-semibold text-base"
             >
               {loading ? "Getting quote..." : swapping ? "Swapping..." : primaryAction}
