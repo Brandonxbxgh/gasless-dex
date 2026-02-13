@@ -1099,7 +1099,15 @@ export function UnifiedSwap() {
           )}
 
           {error && <p className="text-red-400 text-sm">{error}</p>}
-          {txHash && !completedAction && (
+          {txHash && swapping && (
+            <p className="text-center text-sm text-amber-400/90">
+              Confirming transaction…{" "}
+              <a href={`${EXPLORER_URL[txChainId ?? fromChainId] ?? "https://basescan.org"}/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline">
+                View on explorer
+              </a>
+            </p>
+          )}
+          {txHash && !completedAction && !swapping && error && (
             <a href={`${EXPLORER_URL[txChainId ?? fromChainId] ?? "https://basescan.org"}/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="block text-center text-sm text-sky-400 hover:underline">
               View failed transaction
             </a>
