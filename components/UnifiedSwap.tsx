@@ -15,7 +15,6 @@ import {
   type SignedApprovalData,
 } from "@/lib/api";
 import { splitSignature, SignatureType } from "@/lib/signature";
-import { addToHistory } from "@/lib/history";
 
 export type SwapTabId = "swap" | "wrap" | "bridge";
 
@@ -518,7 +517,6 @@ export function UnifiedSwap() {
           }
         }
         setCompletedAction("wrap");
-        addToHistory({ chainId: fromChainId, chainName: CHAIN_NAME[fromChainId], txHash: hash, sellSymbol: inputToken.symbol, buySymbol: outputToken.symbol, sellAmount: amount, buyAmount: amount });
         setAmount("");
         setQuote(null);
         setSwapQuote(null);
@@ -542,7 +540,6 @@ export function UnifiedSwap() {
           }
         }
         setCompletedAction("unwrap");
-        addToHistory({ chainId: fromChainId, chainName: CHAIN_NAME[fromChainId], txHash: hash, sellSymbol: inputToken.symbol, buySymbol: outputToken.symbol, sellAmount: amount, buyAmount: amount });
         setAmount("");
         setQuote(null);
         setSwapQuote(null);
@@ -561,16 +558,10 @@ export function UnifiedSwap() {
         setSwapQuote(fresh);
         setQuoteReceivedAt(Date.now());
         const tx = fresh.transaction;
-        const gasParams = tx?.gas && tx?.gasPrice
-          ? { gas: BigInt(tx.gas), gasPrice: BigInt(tx.gasPrice) }
-          : tx?.maxFeePerGas && tx?.maxPriorityFeePerGas
-            ? { maxFeePerGas: BigInt(tx.maxFeePerGas), maxPriorityFeePerGas: BigInt(tx.maxPriorityFeePerGas) }
-            : {};
         const hash = await walletClient.sendTransaction({
           to: tx.to as `0x${string}`,
           data: tx.data as `0x${string}`,
           value: BigInt(tx.value || 0),
-          ...gasParams,
         });
         setTxHash(hash);
         setTxChainId(fromChainId);
@@ -583,12 +574,6 @@ export function UnifiedSwap() {
           }
         }
         setCompletedAction("swap");
-        addToHistory({
-          chainId: fromChainId, chainName: CHAIN_NAME[fromChainId], txHash: hash,
-          sellSymbol: inputToken.symbol, buySymbol: outputToken.symbol,
-          sellAmount: formatUnits(BigInt(fresh.sellAmount), inputToken.decimals),
-          buyAmount: formatUnits(BigInt(fresh.buyAmount), getTokenDecimals(outputToken.symbol, fromChainId)),
-        });
         setAmount("");
         setSwapQuote(null);
       } else if (quote) {
@@ -641,7 +626,6 @@ export function UnifiedSwap() {
           setTxHash(st.transactionHash);
           setTxChainId(fromChainId);
           setCompletedAction("swap");
-          addToHistory({ chainId: fromChainId, chainName: CHAIN_NAME[fromChainId], txHash: st.transactionHash, tradeHash: th, sellSymbol: inputToken.symbol, buySymbol: outputToken.symbol, sellAmount: formatUnits(BigInt(fresh.sellAmount), inputToken.decimals), buyAmount: formatUnits(BigInt(fresh.buyAmount), getTokenDecimals(outputToken.symbol, fromChainId)) });
         }
         setAmount("");
         setQuote(null);
@@ -649,7 +633,7 @@ export function UnifiedSwap() {
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Swap failed";
       if (msg.toLowerCase().includes("reject") || msg.toLowerCase().includes("declined")) {
-        setError("Transaction was rejected. If your wallet showed \"could not load rate fees\", approve the token first (click Approve if shown), get a fresh quote, then try again.");
+        setError("Transaction was rejected.");
       } else {
         setError(msg);
       }
@@ -705,17 +689,10 @@ export function UnifiedSwap() {
         }
       }
       const s = freshQuote.swapTx;
-      const gasParams =
-        estimatedGasWei != null && gasPriceWei != null
-          ? { gas: (estimatedGasWei * BigInt(120)) / BigInt(100), gasPrice: gasPriceWei }
-          : s.maxFeePerGas && s.maxPriorityFeePerGas
-            ? { maxFeePerGas: BigInt(s.maxFeePerGas), maxPriorityFeePerGas: BigInt(s.maxPriorityFeePerGas) }
-            : {};
       const hash = await walletClient.sendTransaction({
         to: s.to as `0x${string}`,
         data: s.data as `0x${string}`,
         value: s.value ? BigInt(s.value) : undefined,
-        ...gasParams,
       });
       setTxHash(hash);
       setTxChainId(fromChainId);
@@ -736,7 +713,7 @@ export function UnifiedSwap() {
     } finally {
       setSwapping(false);
     }
-  }, [acrossQuote, walletClient, address, publicClient, needsChainSwitch, switchChain, fromChainId, toChainId, amount, inputToken, outputToken, isInputNative, isOutputNative, estimatedGasWei, gasPriceWei]);
+  }, [acrossQuote, walletClient, address, publicClient, needsChainSwitch, switchChain, fromChainId, toChainId, amount, inputToken, outputToken, isInputNative, isOutputNative]);
 
   const isQuoteExpiredError = error != null && (
     error.toLowerCase().includes("invalidquotetimestamp") ||
@@ -1236,9 +1213,6 @@ export function UnifiedSwap() {
                 )}
                 <p className="text-xs text-slate-500 pt-1">
                   {quoteCountdown != null ? `Quote expires in ${quoteCountdown}s` : "Quote refreshes every 30s"}
-                </p>
-                <p className="text-xs text-amber-400/90 pt-2 border-t border-slate-700/50 mt-2">
-                  <strong>Wallet shows &quot;could not load fee rates&quot;?</strong> Approve the token first (click Approve if shown), get a fresh quote, then try Swap again. We pass gas to your wallet to avoid this.
                 </p>
               </div>
             )}

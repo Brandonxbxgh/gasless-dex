@@ -20,7 +20,6 @@ import {
   getDefaultSellToken,
   type SupportedChainId,
 } from "@/lib/chains";
-import { addToHistory } from "@/lib/history";
 
 const ERC20_APPROVE_ABI = [
   { inputs: [{ name: "spender", type: "address" }, { name: "amount", type: "uint256" }], name: "approve", outputs: [{ type: "bool" }], stateMutability: "nonpayable", type: "function" },
@@ -482,16 +481,6 @@ export function Swap() {
         }
         if (statusRes.status === "confirmed" && statusRes.transactionHash) {
           setTxHash(statusRes.transactionHash);
-          addToHistory({
-            chainId: supportedChainId,
-            chainName: CHAIN_NAME[supportedChainId] ?? "Unknown",
-            txHash: statusRes.transactionHash,
-            tradeHash: hash,
-            sellSymbol: sellSymbol,
-            buySymbol: buyToken === NATIVE_TOKEN_ADDRESS ? (NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH") : (tokens.find((t) => t.address === buyToken)?.symbol ?? "?"),
-            sellAmount: formatUnits(BigInt(quote.sellAmount), getTokenDecimals(sellSymbolForLogic, supportedChainId)),
-            buyAmount: formatUnits(BigInt(quote.buyAmount), buyToken === NATIVE_TOKEN_ADDRESS ? 18 : getTokenDecimals(tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH", supportedChainId)),
-          });
           setSwapStatus("success");
         } else {
           setSwapStatus("success");
@@ -581,15 +570,6 @@ export function Swap() {
           return;
         }
       }
-      addToHistory({
-        chainId: supportedChainId,
-        chainName: CHAIN_NAME[supportedChainId] ?? "Unknown",
-        txHash: hash,
-        sellSymbol,
-        buySymbol: buyToken === NATIVE_TOKEN_ADDRESS ? (NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH") : (tokens.find((t) => t.address === buyToken)?.symbol ?? "?"),
-        sellAmount: formatUnits(BigInt(freshQuote.sellAmount), getTokenDecimals(sellSymbolForLogic, supportedChainId)),
-        buyAmount: formatUnits(BigInt(freshQuote.buyAmount), buyToken === NATIVE_TOKEN_ADDRESS ? 18 : getTokenDecimals(tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH", supportedChainId)),
-      });
       setSwapStatus("success");
     } catch (e) {
       let msg = e instanceof Error ? e.message : "Approval or swap failed";
@@ -625,15 +605,6 @@ export function Swap() {
             return;
           }
         }
-        addToHistory({
-          chainId: supportedChainId,
-          chainName: CHAIN_NAME[supportedChainId] ?? "Unknown",
-          txHash: hash,
-          sellSymbol,
-          buySymbol: buyToken === NATIVE_TOKEN_ADDRESS ? (NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH") : (tokens.find((t) => t.address === buyToken)?.symbol ?? "?"),
-          sellAmount: formatUnits(BigInt(swapQuote.sellAmount), getTokenDecimals(sellSymbolForLogic, supportedChainId)),
-          buyAmount: formatUnits(BigInt(swapQuote.buyAmount), buyToken === NATIVE_TOKEN_ADDRESS ? 18 : getTokenDecimals(tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH", supportedChainId)),
-        });
         setSwapStatus("success");
         return;
       }
@@ -713,15 +684,6 @@ export function Swap() {
           return;
         }
       }
-      addToHistory({
-        chainId: supportedChainId,
-        chainName: CHAIN_NAME[supportedChainId] ?? "Unknown",
-        txHash: hash,
-        sellSymbol: NATIVE_SYMBOL_BY_CHAIN[supportedChainId] === "ETH" ? "WETH" : supportedChainId === 56 ? "WBNB" : "WMATIC",
-        buySymbol: NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH",
-        sellAmount,
-        buyAmount: sellAmount,
-      });
       setSwapStatus("success");
       setSellAmount("");
     } catch (e) {
