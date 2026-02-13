@@ -543,7 +543,7 @@ export function UnifiedSwap() {
       const s = acrossQuote.swapTx;
       const gasParams =
         estimatedGasWei != null && gasPriceWei != null
-          ? { gas: (estimatedGasWei * 120n) / 100n, gasPrice: gasPriceWei }
+          ? { gas: (estimatedGasWei * BigInt(120)) / BigInt(100), gasPrice: gasPriceWei }
           : s.maxFeePerGas && s.maxPriorityFeePerGas
             ? { maxFeePerGas: BigInt(s.maxFeePerGas), maxPriorityFeePerGas: BigInt(s.maxPriorityFeePerGas) }
             : {};
