@@ -71,6 +71,10 @@ function getPreferredFeeToken(
 /** 0x Allowance Holder (same on BNB, Ethereum, Base, etc.) - used when 0x doesn't return issues.allowance */
 const ALLOWANCE_HOLDER = "0x0000000000001fF3684f28c67538d4D072C22734" as const;
 
+/** wTXC only has USDC pair on Ethereum - restrict counterparty when wTXC is selected */
+const WTXC_ETH = "0x9FC65df3997073B8551Ffd617154B5102fACbb88" as `0x${string}`;
+const USDC_ETH = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as `0x${string}`;
+
 function truncateAddress(addr: string) {
   if (!addr || addr.length < 10) return addr;
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
@@ -83,6 +87,7 @@ const TOKEN_DECIMALS: Record<string, number> = {
   WETH: 18,
   WBNB: 18,
   WMATIC: 18,
+  wTXC: 18,
   ETH: 18,
   MATIC: 18,
   BNB: 18,
@@ -119,6 +124,7 @@ const TOKEN_OPTIONS: Record<SupportedChainId, { address: `0x${string}`; symbol: 
     { address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as `0x${string}`, symbol: "USDC" },
     { address: "0xdAC17F958D2ee523a2206206994597C13D831ec7" as `0x${string}`, symbol: "USDT" },
     { address: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as `0x${string}`, symbol: "WETH" },
+    { address: "0x9FC65df3997073B8551Ffd617154B5102fACbb88" as `0x${string}`, symbol: "wTXC" },
   ],
 };
 
@@ -129,6 +135,7 @@ const MIN_SELL_AMOUNT: Record<string, number> = {
   WETH: 0.001,
   WBNB: 0.001,
   WMATIC: 0.001,
+  wTXC: 0.001,
   ETH: 0.001,
   MATIC: 0.001,
   BNB: 0.001,
@@ -157,6 +164,20 @@ export function Swap() {
     setQuote(null);
     setSwapQuote(null);
   }, [supportedChainId]);
+
+  useEffect(() => {
+    if (supportedChainId !== 1) return;
+    if (sellToken === WTXC_ETH && buyToken !== USDC_ETH) {
+      setBuyToken(USDC_ETH);
+      setQuote(null);
+      setSwapQuote(null);
+    }
+    if (buyToken === WTXC_ETH && sellToken !== USDC_ETH) {
+      setSellToken(USDC_ETH);
+      setQuote(null);
+      setSwapQuote(null);
+    }
+  }, [supportedChainId, sellToken, buyToken]);
 
   // Refresh state when wallet connects or chain changes (fixes WalletConnect not updating)
   useEffect(() => {
@@ -244,13 +265,23 @@ export function Swap() {
     setSwapQuote(null);
   }, [sellBalanceFormatted]);
 
-  const buyTokenOptions = useMemo(
-    () => [
+  const buyTokenOptions = useMemo(() => {
+    const base = [
       ...tokens,
       { address: NATIVE_TOKEN_ADDRESS as `0x${string}`, symbol: NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH", isNative: true as const },
-    ],
-    [tokens, supportedChainId]
-  );
+    ];
+    if (supportedChainId === 1 && sellToken === WTXC_ETH) {
+      return base.filter((t) => t.address === USDC_ETH);
+    }
+    return base;
+  }, [tokens, supportedChainId, sellToken]);
+
+  const sellTokenOptions = useMemo(() => {
+    if (supportedChainId === 1 && buyToken === WTXC_ETH) {
+      return tokens.filter((t) => t.address === USDC_ETH);
+    }
+    return tokens;
+  }, [tokens, supportedChainId, buyToken]);
 
   const [sellTokenPriceUsd, setSellTokenPriceUsd] = useState<number | null>(null);
   useEffect(() => {
@@ -798,12 +829,12 @@ export function Swap() {
                 </div>
                 <select
                   value={sellToken}
-                  onChange={(e) => { setSellToken(e.target.value as `0x${string}`); setQuote(null); }}
+                  onChange={(e) => { setSellToken(e.target.value as `0x${string}`); setQuote(null); setSwapQuote(null); }}
                   className="rounded-2xl bg-[var(--delta-card)] border border-[var(--swap-pill-border)] text-white text-sm font-medium px-4 py-2.5 min-w-[7rem] cursor-pointer focus:ring-2 focus:ring-[var(--swap-accent)] appearance-none bg-no-repeat bg-right pr-9 shrink-0"
                   style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='white'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M19 9l-7 7-7-7'%3E%3C/path%3E%3C/svg%3E")` }}
                   aria-label="Select token to sell"
                 >
-                  {tokens.map((t) => (
+                  {sellTokenOptions.map((t) => (
                     <option key={t.address} value={t.address}>
                       {t.address === WRAPPED_NATIVE[supportedChainId] ? (NATIVE_SYMBOL_BY_CHAIN[supportedChainId] ?? "ETH") : t.symbol}
                     </option>
