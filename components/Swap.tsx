@@ -365,12 +365,13 @@ export function Swap() {
       const decimals = getTokenDecimals(sellSymbolForLogic, supportedChainId);
       const amountWei = parseUnits(String(amountToUse), decimals).toString();
 
-      const useSwapApi = isSellingNative || isBuyingNative;
+      // Use Swap API for native ETH trades or wTXC (gasless API may not support wTXC)
+      const useSwapApi = isSellingNative || isBuyingNative || (supportedChainId === 1 && (sellToken === WTXC_ETH || buyToken === WTXC_ETH));
       if (useSwapApi) {
         const res = await getSwapQuote({
           chainId: supportedChainId,
           sellToken: isSellingNative ? NATIVE_TOKEN_ADDRESS : sellToken,
-          buyToken,
+          buyToken: isBuyingNative ? NATIVE_TOKEN_ADDRESS : buyToken,
           sellAmount: amountWei,
           taker: address,
           recipient: receiveAddress && receiveAddress !== address ? receiveAddress : undefined,

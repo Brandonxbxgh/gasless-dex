@@ -29,6 +29,16 @@ export function Header() {
             Swap
           </Link>
           <Link
+            href="/swap/crosschain"
+            className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+              pathname === "/swap/crosschain"
+                ? "bg-[var(--swap-accent)]/20 text-[var(--swap-accent)]"
+                : "text-slate-300 hover:bg-slate-800 hover:text-white"
+            }`}
+          >
+            Cross-chain
+          </Link>
+          <Link
             href="/swap/solana"
             className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
               pathname === "/swap/solana"
