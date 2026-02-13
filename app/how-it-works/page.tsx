@@ -92,7 +92,7 @@ export default function HowItWorksPage() {
           <ul className="space-y-1.5 text-slate-200 text-sm list-disc list-inside mb-2">
             <li><strong className="text-white">What you sell</strong> always comes from <strong>your connected wallet</strong> only. No one else’s funds are used.</li>
             <li><strong className="text-white">0x</strong> runs the swap (DEX routing, execution). The app only forwards your recipient address to 0x.</li>
-            <li><strong className="text-white">The 0.1% fee</strong> goes to the app; the rest of the output goes to you (or to the address you entered).</li>
+            <li><strong className="text-white">The 0.12% fee</strong> (same-chain) or <strong>0.15%</strong> (cross-chain) goes to the app; the rest of the output goes to you (or to the address you entered).</li>
           </ul>
           <p className="text-slate-200 text-sm">
             So: your tokens in → 0x swaps them → output (minus fee) goes to the address you chose. Nobody is “covering” your swap; you’re only choosing where the result is sent.

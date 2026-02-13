@@ -93,7 +93,8 @@ const WRAPPED_BY_CHAIN: Record<number, string> = {
   56: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
 };
 
-const SWAP_FEE_BPS = "10";
+const SWAP_FEE_BPS = "12";
+const CROSSCHAIN_FEE_BPS = "15";
 const SWAP_FEE_RECIPIENT = process.env.NEXT_PUBLIC_SWAP_FEE_RECIPIENT || "";
 
 function truncateAddress(addr: string) {
@@ -147,11 +148,9 @@ export function UnifiedSwap() {
   const [outputTokenPriceUsd, setOutputTokenPriceUsd] = useState<number | null>(null);
   const [nativeTokenPriceUsd, setNativeTokenPriceUsd] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<SwapTabId>("swap");
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const setTab = useCallback((tab: SwapTabId) => {
     setActiveTab(tab);
-    setMobileMenuOpen(false);
     setQuote(null);
     setSwapQuote(null);
     setAcrossQuote(null);
@@ -395,9 +394,20 @@ export function UnifiedSwap() {
         const amountWei = parseUnits(amount, inputToken.decimals).toString();
         const inputAddr = isInputNative ? WRAPPED_BY_CHAIN[fromChainId] : inputToken.address;
         const outputAddr = isOutputNative ? WRAPPED_BY_CHAIN[toChainId] : outputToken.address;
-        const res = await fetch(
-          `/api/across-quote?tradeType=exactInput&amount=${amountWei}&inputToken=${inputAddr}&outputToken=${outputAddr}&originChainId=${fromChainId}&destinationChainId=${toChainId}&depositor=${address}`
-        );
+        const acrossParams = new URLSearchParams({
+          tradeType: "exactInput",
+          amount: amountWei,
+          inputToken: inputAddr,
+          outputToken: outputAddr,
+          originChainId: String(fromChainId),
+          destinationChainId: String(toChainId),
+          depositor: address,
+        });
+        if (SWAP_FEE_RECIPIENT) {
+          acrossParams.set("appFee", (Number(CROSSCHAIN_FEE_BPS) / 10000).toString());
+          acrossParams.set("appFeeRecipient", SWAP_FEE_RECIPIENT);
+        }
+        const res = await fetch(`/api/across-quote?${acrossParams.toString()}`);
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error || "Quote failed");
         const bridge = data.steps?.bridge;
@@ -654,9 +664,20 @@ export function UnifiedSwap() {
       const amountWei = parseUnits(amount, inputToken.decimals).toString();
       const inputAddr = isInputNative ? WRAPPED_BY_CHAIN[fromChainId] : inputToken.address;
       const outputAddr = isOutputNative ? WRAPPED_BY_CHAIN[toChainId] : outputToken.address;
-      const res = await fetch(
-        `/api/across-quote?tradeType=exactInput&amount=${amountWei}&inputToken=${inputAddr}&outputToken=${outputAddr}&originChainId=${fromChainId}&destinationChainId=${toChainId}&depositor=${address}`
-      );
+      const acrossParams = new URLSearchParams({
+        tradeType: "exactInput",
+        amount: amountWei,
+        inputToken: inputAddr,
+        outputToken: outputAddr,
+        originChainId: String(fromChainId),
+        destinationChainId: String(toChainId),
+        depositor: address,
+      });
+      if (SWAP_FEE_RECIPIENT) {
+        acrossParams.set("appFee", (Number(CROSSCHAIN_FEE_BPS) / 10000).toString());
+        acrossParams.set("appFeeRecipient", SWAP_FEE_RECIPIENT);
+      }
+      const res = await fetch(`/api/across-quote?${acrossParams.toString()}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Quote failed");
       const bridge = data.steps?.bridge;
@@ -751,7 +772,7 @@ export function UnifiedSwap() {
         const dec = getTokenDecimals(outputToken.symbol, fromChainId);
         const amt = BigInt(swapQuote.fees.integratorFee.amount);
         feeItems.push({
-          label: "App fee (0.1%)",
+          label: "App fee (0.12%)",
           value: `${formatUnits(amt, dec)} ${outputToken.symbol}`,
           valueUsd: toUsdStr(amt, dec, outputTokenPriceUsd),
         });
@@ -788,7 +809,7 @@ export function UnifiedSwap() {
         const dec = getTokenDecimals(outputToken.symbol, fromChainId);
         const amt = BigInt(quote.fees.integratorFee.amount);
         feeItems.push({
-          label: "App fee (0.1%)",
+          label: "App fee (0.12%)",
           value: `${formatUnits(amt, dec)} ${outputToken.symbol}`,
           valueUsd: toUsdStr(amt, dec, outputTokenPriceUsd),
         });
@@ -807,6 +828,17 @@ export function UnifiedSwap() {
     }
     if (acrossQuote) {
       const feeItems: FeeItem[] = [];
+      if (SWAP_FEE_RECIPIENT && acrossQuote.expectedOutputAmount) {
+        const dec = acrossQuote.outputToken?.decimals ?? getTokenDecimals(outputToken.symbol, toChainId);
+        const expectedAmt = BigInt(acrossQuote.expectedOutputAmount);
+        const appFeeAmt = (expectedAmt * BigInt(CROSSCHAIN_FEE_BPS)) / BigInt(10000);
+        const sym = acrossQuote.fees?.total?.token?.symbol ?? outputToken.symbol;
+        feeItems.push({
+          label: "App fee (0.15%)",
+          value: `${formatUnits(appFeeAmt, dec)} ${sym}`,
+          valueUsd: toUsdStr(appFeeAmt, dec, outputTokenPriceUsd),
+        });
+      }
       if (acrossQuote.fees?.total?.amount && acrossQuote.fees.total.token) {
         const dec = acrossQuote.fees.total.token.decimals ?? 6;
         const sym = acrossQuote.fees.total.token.symbol ?? "USDC";
@@ -859,26 +891,9 @@ export function UnifiedSwap() {
 
   return (
     <div className="w-full max-w-md mx-auto rounded-3xl border p-6 sm:p-8 bg-[var(--delta-card)] border-[var(--swap-pill-border)] shadow-xl relative overflow-hidden">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl sm:text-3xl font-bold text-white">Swap</h1>
-          <span className="md:hidden text-sm font-medium text-[var(--swap-accent)] bg-[var(--swap-accent)]/20 px-2.5 py-1 rounded-lg">
-            {TAB_LABELS.find((t) => t.id === activeTab)?.label ?? activeTab}
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={() => setMobileMenuOpen((o) => !o)}
-          className="md:hidden p-2 -mr-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10 transition-colors"
-          aria-label="Open menu"
-        >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-      </div>
+      <h1 className="text-2xl sm:text-3xl font-bold text-white mb-4">Swap</h1>
 
-      <div className="hidden md:flex rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] p-1 mb-4">
+      <div className="flex rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] p-1 mb-4">
         {TAB_LABELS.map(({ id, label }) => (
           <button
             key={id}
@@ -891,52 +906,6 @@ export function UnifiedSwap() {
             {label}
           </button>
         ))}
-      </div>
-
-      <div
-        className={`fixed inset-0 z-50 md:hidden transition-opacity duration-200 ${
-          mobileMenuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
-        }`}
-        aria-hidden={!mobileMenuOpen}
-      >
-        <div
-          className="absolute inset-0 bg-black/60"
-          onClick={() => setMobileMenuOpen(false)}
-          aria-hidden
-        />
-        <div
-          className={`absolute right-0 top-0 bottom-0 w-64 max-w-[85vw] bg-[var(--delta-card)] border-l border-[var(--swap-pill-border)] shadow-2xl flex flex-col transition-transform duration-200 ${
-            mobileMenuOpen ? "translate-x-0" : "translate-x-full"
-          }`}
-        >
-          <div className="flex items-center justify-between p-4 border-b border-[var(--swap-pill-border)]">
-            <span className="text-white font-semibold">Select action</span>
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen(false)}
-              className="p-2 rounded-lg text-white/80 hover:text-white hover:bg-white/10"
-              aria-label="Close menu"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-          <nav className="p-4 flex flex-col gap-1">
-            {TAB_LABELS.map(({ id, label }) => (
-              <button
-                key={id}
-                type="button"
-                onClick={() => setTab(id)}
-                className={`w-full text-left py-3 px-4 rounded-xl text-base font-medium transition-colors ${
-                  activeTab === id ? "bg-[var(--swap-accent)] text-white" : "text-[var(--delta-text-muted)] hover:bg-white/5 hover:text-white"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
-        </div>
       </div>
 
       {!isConnected ? (

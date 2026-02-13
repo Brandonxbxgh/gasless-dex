@@ -78,7 +78,7 @@ export const WRAPPED_BY_CHAIN: Record<number, string> = {
   56: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
 };
 
-export const SWAP_FEE_BPS = "10";
+export const SWAP_FEE_BPS = "12";
 
 export function getTokenDecimals(symbol: string, chainId: number): number {
   if (chainId === 56 && symbol === "USDT") return 18;

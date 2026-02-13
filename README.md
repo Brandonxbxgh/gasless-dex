@@ -5,7 +5,7 @@ A multi-chain swap interface using the **0x Gasless API v2**. Users sign a messa
 ## Features
 
 - **Gasless swaps** — Sign EIP-712, we relay the transaction
-- **0.1% fee** — `swapFeeBps: 10` to your `swapFeeRecipient`
+- **0.12% same-chain / 0.15% cross-chain fee** — `swapFeeBps: 12` and Across `appFee` to your `swapFeeRecipient`
 - **Multi-chain** — Base (primary), Arbitrum, Polygon
 - **$0 budget** — Vercel hosting + free-tier Alchemy + 0x API
 
@@ -54,7 +54,7 @@ NEXT_PUBLIC_ALCHEMY_POLYGON_URL=https://polygon-mainnet.g.alchemy.com/v2/YOUR_AL
 NEXT_PUBLIC_SWAP_FEE_RECIPIENT=0xYourWalletAddressForFees
 ```
 
-**Fee recipient:** This is your wallet. You earn 0.1% (`swapFeeBps: 10`) on every trade.
+**Fee recipient:** This is your wallet. You earn 0.12% on same-chain swaps and 0.15% on cross-chain swaps.
 
 **WalletConnect (optional):** Add `NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID` if you want mobile wallet support. Without it, MetaMask/browser wallets still work.
 
@@ -114,7 +114,7 @@ The raw signature is 65 bytes: `r` (32) + `s` (32) + `v` (1). We split it in `li
 
 ## Monetization
 
-- `swapFeeBps: "10"` → 0.1% fee
+- `swapFeeBps: "12"` → 0.12% same-chain fee; cross-chain uses Across `appFee` (0.15%)
 - `swapFeeRecipient` → your wallet
 - `swapFeeToken` → sell or buy token (we use sell token)
 

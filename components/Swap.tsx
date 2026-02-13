@@ -54,7 +54,7 @@ const EXPLORER_URL: Record<SupportedChainId, string> = {
   1: "https://etherscan.io",
 };
 
-const SWAP_FEE_BPS = "10";
+const SWAP_FEE_BPS = "12";
 const SWAP_FEE_RECIPIENT = process.env.NEXT_PUBLIC_SWAP_FEE_RECIPIENT || "";
 
 /** Prefer fee in stablecoin (USDC/USDT); otherwise use buy token, else sell token */
@@ -889,7 +889,7 @@ export function Swap() {
                 </select>
               </div>
               {feeDisplay && !isUnwrap && (
-                <p className="text-xs text-slate-400 mt-1.5">Fee (0.1%): {feeDisplay}</p>
+                <p className="text-xs text-slate-400 mt-1.5">Fee (0.12%): {feeDisplay}</p>
               )}
             </div>
           </div>
