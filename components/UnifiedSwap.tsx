@@ -122,7 +122,18 @@ export function UnifiedSwap() {
   const [amount, setAmount] = useState("");
   const [quote, setQuote] = useState<GaslessQuoteResponse | null>(null);
   const [swapQuote, setSwapQuote] = useState<SwapQuoteResponse | null>(null);
-  const [acrossQuote, setAcrossQuote] = useState<{ approvalTxns?: { to: string; data: string; value?: string }[]; swapTx: { to: string; data: string; value?: string }; expectedOutputAmount?: string; outputToken?: { decimals: number }; steps?: { bridge?: { outputAmount: string; tokenOut?: { decimals: number } } } } | null>(null);
+  const [acrossQuote, setAcrossQuote] = useState<{
+    approvalTxns?: { to: string; data: string; value?: string }[];
+    swapTx: { to: string; data: string; value?: string; gas?: string; maxFeePerGas?: string; maxPriorityFeePerGas?: string };
+    expectedOutputAmount?: string;
+    outputToken?: { decimals: number };
+    fees?: { total?: { amount: string; amountUsd?: string; token?: { decimals: number; symbol: string } }; originGas?: { amount: string; amountUsd?: string } };
+    quoteExpiryTimestamp?: number;
+  } | null>(null);
+  const [quoteReceivedAt, setQuoteReceivedAt] = useState<number | null>(null);
+  const [quoteCountdown, setQuoteCountdown] = useState<number | null>(null);
+  const [estimatedGasWei, setEstimatedGasWei] = useState<bigint | null>(null);
+  const [gasPriceWei, setGasPriceWei] = useState<bigint | null>(null);
   const [loading, setLoading] = useState(false);
   const [swapping, setSwapping] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -232,6 +243,10 @@ export function UnifiedSwap() {
     setQuote(null);
     setSwapQuote(null);
     setAcrossQuote(null);
+    setQuoteReceivedAt(null);
+    setQuoteCountdown(null);
+    setEstimatedGasWei(null);
+    setGasPriceWei(null);
 
     try {
       if (isSameChain) {
@@ -255,6 +270,7 @@ export function UnifiedSwap() {
           });
           if (res.liquidityAvailable && res.transaction) {
             setSwapQuote(res);
+            setQuoteReceivedAt(Date.now());
           } else setError("No liquidity available");
         } else {
           const res = await getGaslessQuote({
@@ -269,8 +285,10 @@ export function UnifiedSwap() {
             tradeSurplusRecipient: SWAP_FEE_RECIPIENT,
             slippageBps: 100,
           });
-          if (res.liquidityAvailable) setQuote(res);
-          else setError("No liquidity available");
+          if (res.liquidityAvailable) {
+            setQuote(res);
+            setQuoteReceivedAt(Date.now());
+          } else setError("No liquidity available");
         }
       } else {
         const amountWei = parseUnits(amount, inputToken.decimals).toString();
@@ -281,7 +299,23 @@ export function UnifiedSwap() {
         );
         const data = await res.json();
         if (!res.ok) throw new Error(data?.error || "Quote failed");
-        setAcrossQuote(data);
+        const bridge = data.steps?.bridge;
+        const swapTx = data.swapTx ?? bridge?.swapTx;
+        const expectedOutputAmount = data.expectedOutputAmount ?? bridge?.expectedOutputAmount;
+        const outputTokenInfo = data.outputToken ?? bridge?.tokenOut;
+        const fees = data.fees ?? (bridge?.fees?.totalRelay ? {
+          total: { amount: bridge.fees.totalRelay.total, token: bridge.tokenOut ?? { decimals: 18, symbol: "ETH" } },
+          originGas: bridge.fees.relayerGas ? { amount: bridge.fees.relayerGas.total } : undefined,
+        } : undefined);
+        setAcrossQuote({
+          approvalTxns: data.approvalTxns,
+          swapTx,
+          expectedOutputAmount,
+          outputToken: outputTokenInfo ? { decimals: outputTokenInfo.decimals ?? 18 } : undefined,
+          fees,
+          quoteExpiryTimestamp: data.quoteExpiryTimestamp ?? (Date.now() + 30000),
+        });
+        setQuoteReceivedAt(Date.now());
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Quote failed");
@@ -308,6 +342,52 @@ export function UnifiedSwap() {
       if (quoteRefreshRef.current) clearInterval(quoteRefreshRef.current);
     };
   }, [hasQuote, isWrap, isUnwrap]);
+
+  useEffect(() => {
+    if (!quoteReceivedAt || !hasQuote || isWrap || isUnwrap) {
+      setQuoteCountdown(null);
+      return;
+    }
+    const QUOTE_TTL = 30;
+    const update = () => {
+      const elapsed = Math.floor((Date.now() - quoteReceivedAt) / 1000);
+      const left = Math.max(0, QUOTE_TTL - elapsed);
+      setQuoteCountdown(left);
+      if (left <= 0) setQuoteReceivedAt(null);
+    };
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [quoteReceivedAt, hasQuote, isWrap, isUnwrap]);
+
+  useEffect(() => {
+    if (!acrossQuote || !address || chainId !== fromChainId) {
+      setEstimatedGasWei(null);
+      setGasPriceWei(null);
+      return;
+    }
+    const s = acrossQuote.swapTx;
+    if (!s?.to || !s?.data) return;
+    const client = publicClient;
+    if (!client) return;
+    Promise.all([
+      client.estimateGas({
+        account: address as `0x${string}`,
+        to: s.to as `0x${string}`,
+        data: s.data as `0x${string}`,
+        value: s.value ? BigInt(s.value) : undefined,
+      }),
+      client.getGasPrice(),
+    ])
+      .then(([gas, price]) => {
+        setEstimatedGasWei(gas);
+        setGasPriceWei(price);
+      })
+      .catch(() => {
+        setEstimatedGasWei(null);
+        setGasPriceWei(null);
+      });
+  }, [acrossQuote, address, chainId, fromChainId, publicClient]);
 
   const executeSameChain = useCallback(async () => {
     if (!walletClient || !address) return;
@@ -360,7 +440,17 @@ export function UnifiedSwap() {
           setSwapQuote(fresh);
         }
         const tx = (swapQuote.transaction ?? (await getSwapQuote({ chainId: fromChainId, sellToken: sellAddr, buyToken: (isOutputNative ? NATIVE_TOKEN_ADDRESS : outputToken.address) as `0x${string}`, sellAmount: swapQuote.sellAmount, taker: address, swapFeeBps: SWAP_FEE_BPS, swapFeeRecipient: SWAP_FEE_RECIPIENT, swapFeeToken: outputToken.address as `0x${string}`, tradeSurplusRecipient: SWAP_FEE_RECIPIENT, slippageBps: 100 })).transaction);
-        const hash = await walletClient.sendTransaction({ to: tx!.to as `0x${string}`, data: tx!.data as `0x${string}`, value: BigInt(tx!.value || 0) });
+        const gasParams = tx?.gas && tx?.gasPrice
+          ? { gas: BigInt(tx.gas), gasPrice: BigInt(tx.gasPrice) }
+          : tx?.maxFeePerGas && tx?.maxPriorityFeePerGas
+            ? { maxFeePerGas: BigInt(tx.maxFeePerGas), maxPriorityFeePerGas: BigInt(tx.maxPriorityFeePerGas) }
+            : {};
+        const hash = await walletClient.sendTransaction({
+          to: tx!.to as `0x${string}`,
+          data: tx!.data as `0x${string}`,
+          value: BigInt(tx!.value || 0),
+          ...gasParams,
+        });
         setTxHash(hash);
         if (publicClient) await publicClient.waitForTransactionReceipt({ hash });
         addToHistory({
@@ -441,7 +531,18 @@ export function UnifiedSwap() {
         }
       }
       const s = acrossQuote.swapTx;
-      const hash = await walletClient.sendTransaction({ to: s.to as `0x${string}`, data: s.data as `0x${string}`, value: s.value ? BigInt(s.value) : undefined });
+      const gasParams =
+        estimatedGasWei != null && gasPriceWei != null
+          ? { gas: (estimatedGasWei * 120n) / 100n, gasPrice: gasPriceWei }
+          : s.maxFeePerGas && s.maxPriorityFeePerGas
+            ? { maxFeePerGas: BigInt(s.maxFeePerGas), maxPriorityFeePerGas: BigInt(s.maxPriorityFeePerGas) }
+            : {};
+      const hash = await walletClient.sendTransaction({
+        to: s.to as `0x${string}`,
+        data: s.data as `0x${string}`,
+        value: s.value ? BigInt(s.value) : undefined,
+        ...gasParams,
+      });
       setTxHash(hash);
       setAmount("");
       setAcrossQuote(null);
@@ -450,7 +551,7 @@ export function UnifiedSwap() {
     } finally {
       setSwapping(false);
     }
-  }, [acrossQuote, walletClient, address, publicClient, needsChainSwitch, switchChain, fromChainId]);
+  }, [acrossQuote, walletClient, address, publicClient, needsChainSwitch, switchChain, fromChainId, estimatedGasWei, gasPriceWei]);
 
   const execute = useCallback(() => {
     if (isSameChain) executeSameChain();
@@ -485,10 +586,25 @@ export function UnifiedSwap() {
       return { type: "gasless" as const, sources, gasWei: null, feeItems };
     }
     if (acrossQuote) {
-      return { type: "crosschain" as const, sources: ["Across"], gasWei: null, feeItems: [] };
+      const feeItems: { label: string; value: string }[] = [];
+      if (acrossQuote.fees?.total?.amount && acrossQuote.fees.total.token) {
+        const dec = acrossQuote.fees.total.token.decimals ?? 6;
+        const sym = acrossQuote.fees.total.token.symbol ?? "USDC";
+        feeItems.push({ label: "Bridge + fees", value: `${formatUnits(BigInt(acrossQuote.fees.total.amount), dec)} ${sym}` });
+        if (acrossQuote.fees.total.amountUsd) {
+          feeItems.push({ label: "Fees (USD)", value: `~$${parseFloat(acrossQuote.fees.total.amountUsd).toFixed(4)}` });
+        }
+      }
+      const gasWei =
+        estimatedGasWei && gasPriceWei
+          ? estimatedGasWei * gasPriceWei
+          : acrossQuote.fees?.originGas?.amount
+            ? BigInt(acrossQuote.fees.originGas.amount)
+            : null;
+      return { type: "crosschain" as const, sources: ["Across"], gasWei, feeItems };
     }
     return null;
-  }, [swapQuote, quote, acrossQuote, outputToken.symbol, fromChainId]);
+  }, [swapQuote, quote, acrossQuote, outputToken.symbol, fromChainId, estimatedGasWei, gasPriceWei]);
 
   const isGetQuoteDisabled = useMemo(() => {
     if (!amount || parseFloat(amount) <= 0) return true;
@@ -532,6 +648,7 @@ export function UnifiedSwap() {
                 setQuote(null);
                 setSwapQuote(null);
                 setAcrossQuote(null);
+                setQuoteReceivedAt(null);
               }}
               className="w-full rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] text-white text-sm px-3 py-2 mb-2"
             >
@@ -551,6 +668,7 @@ export function UnifiedSwap() {
                   setQuote(null);
                   setSwapQuote(null);
                   setAcrossQuote(null);
+                  setQuoteReceivedAt(null);
                 }}
                 className="flex-1 rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] text-white px-3 py-2"
               />
@@ -562,6 +680,7 @@ export function UnifiedSwap() {
                   setQuote(null);
                   setSwapQuote(null);
                   setAcrossQuote(null);
+                  setQuoteReceivedAt(null);
                 }}
                 className="rounded-xl bg-[var(--delta-card)] border border-[var(--swap-pill-border)] text-white text-sm px-3 py-2 w-28"
               >
@@ -592,6 +711,7 @@ export function UnifiedSwap() {
                 setQuote(null);
                 setSwapQuote(null);
                 setAcrossQuote(null);
+                setQuoteReceivedAt(null);
               }}
               className="w-full rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] text-white text-sm px-3 py-2 mb-2"
             >
@@ -609,6 +729,7 @@ export function UnifiedSwap() {
                   setQuote(null);
                   setSwapQuote(null);
                   setAcrossQuote(null);
+                  setQuoteReceivedAt(null);
                 }}
                 className="rounded-lg bg-[var(--delta-card)] border border-[var(--swap-pill-border)] text-white text-sm px-2 py-1.5"
               >
@@ -663,7 +784,14 @@ export function UnifiedSwap() {
 
             {hasQuote && quoteBreakdown && !isWrap && !isUnwrap && (
               <div className="rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] p-4 space-y-2">
-                <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">Quote breakdown</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-slate-400 uppercase tracking-wide">Quote breakdown</p>
+                  {quoteCountdown != null && (
+                    <span className={`text-xs font-mono ${quoteCountdown <= 10 ? "text-amber-400" : "text-slate-500"}`}>
+                      {quoteCountdown}s
+                    </span>
+                  )}
+                </div>
                 {quoteBreakdown.sources.length > 0 && (
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-slate-500">Route:</span>
@@ -677,10 +805,18 @@ export function UnifiedSwap() {
                   </div>
                 ))}
                 {quoteBreakdown.gasWei != null && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-500">Est. gas</span>
-                    <span className="text-white">~{formatUnits(quoteBreakdown.gasWei, 18)} {fromChainId === 137 ? "MATIC" : fromChainId === 56 ? "BNB" : "ETH"}</span>
-                  </div>
+                  <>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-500">Est. gas</span>
+                      <span className="text-white">~{formatUnits(quoteBreakdown.gasWei, 18)} {fromChainId === 137 ? "MATIC" : fromChainId === 56 ? "BNB" : "ETH"}</span>
+                    </div>
+                    {gasPriceWei != null && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-slate-500">Gas price</span>
+                        <span className="text-white">~{formatUnits(gasPriceWei, 9)} Gwei</span>
+                      </div>
+                    )}
+                  </>
                 )}
                 {quoteBreakdown.type === "gasless" && (
                   <p className="text-xs text-emerald-400">Gasless — no gas to pay</p>
@@ -688,7 +824,15 @@ export function UnifiedSwap() {
                 {quoteBreakdown.type === "crosschain" && (
                   <p className="text-xs text-slate-500">Gas on origin chain only</p>
                 )}
-                <p className="text-xs text-slate-500 pt-1">Quote refreshes every 30s</p>
+                {quoteBreakdown.type !== "gasless" && needsChainSwitch && (
+                  <p className="text-xs text-amber-400">Switch to origin chain to see gas estimate</p>
+                )}
+                <p className="text-xs text-slate-500 pt-1">
+                  {quoteCountdown != null ? `Quote expires in ${quoteCountdown}s` : "Quote refreshes every 30s"}
+                </p>
+                <p className="text-xs text-amber-400/90 pt-2 border-t border-slate-700/50 mt-2">
+                  <strong>Wallet shows &quot;could not load fee rates&quot;?</strong> Approve the token first (click Approve if shown), get a fresh quote, then try Swap again. We pass gas to your wallet to avoid this.
+                </p>
               </div>
             )}
 
