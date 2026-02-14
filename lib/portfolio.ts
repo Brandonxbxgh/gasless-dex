@@ -97,7 +97,7 @@ export async function fetchPortfolioBalances(address: `0x${string}`): Promise<Po
             args: [address],
           });
         }
-        if (balanceRaw === 0n) continue;
+        if (balanceRaw === BigInt(0)) continue;
 
         const balance = formatUnits(balanceRaw, token.decimals);
         entries.push({
