@@ -14,7 +14,7 @@ const COINGECKO_IDS: Record<string, string> = {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const symbols = searchParams.get("symbols")?.split(",").filter(Boolean) ?? [];
-  const ids = [...new Set(symbols.map((s) => COINGECKO_IDS[s] ?? s.toLowerCase()).filter(Boolean))];
+  const ids = Array.from(new Set(symbols.map((s) => COINGECKO_IDS[s] ?? s.toLowerCase()).filter(Boolean)));
   if (ids.length === 0) {
     return NextResponse.json({});
   }
