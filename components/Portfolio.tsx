@@ -39,7 +39,7 @@ export function Portfolio() {
     setError(null);
     try {
       const balances = await fetchPortfolioBalances(address as `0x${string}`);
-      const symbols = [...new Set(balances.map((e) => e.symbol))];
+      const symbols = Array.from(new Set(balances.map((e) => e.symbol)));
       const priceRes = await fetch(`/api/coingecko/simple-price?symbols=${symbols.join(",")}`);
       const prices = (await priceRes.json()) as Record<string, number>;
 
