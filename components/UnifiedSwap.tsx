@@ -148,6 +148,12 @@ export function UnifiedSwap() {
   const [outputTokenPriceUsd, setOutputTokenPriceUsd] = useState<number | null>(null);
   const [nativeTokenPriceUsd, setNativeTokenPriceUsd] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<SwapTabId>("swap");
+  const [customRecipient, setCustomRecipient] = useState("");
+  const [showCustomRecipient, setShowCustomRecipient] = useState(false);
+
+  const receiveAddress = customRecipient.trim() && isAddress(customRecipient.trim()) && customRecipient.trim() !== address
+    ? customRecipient.trim()
+    : undefined;
 
   const setTab = useCallback((tab: SwapTabId) => {
     setActiveTab(tab);
@@ -362,6 +368,7 @@ export function UnifiedSwap() {
             buyToken: buyAddr,
             sellAmount: amountWei,
             taker: address,
+            recipient: receiveAddress,
             swapFeeBps: SWAP_FEE_BPS,
             swapFeeRecipient: SWAP_FEE_RECIPIENT,
             swapFeeToken: outputToken.address,
@@ -379,6 +386,7 @@ export function UnifiedSwap() {
             buyToken: buyAddr as `0x${string}`,
             sellAmount: amountWei,
             taker: address,
+            recipient: receiveAddress,
             swapFeeBps: SWAP_FEE_BPS,
             swapFeeRecipient: SWAP_FEE_RECIPIENT,
             swapFeeToken: outputToken.address as `0x${string}`,
@@ -403,6 +411,7 @@ export function UnifiedSwap() {
           destinationChainId: String(toChainId),
           depositor: address,
         });
+        if (receiveAddress) acrossParams.set("recipient", receiveAddress);
         if (SWAP_FEE_RECIPIENT) {
           acrossParams.set("appFee", (Number(CROSSCHAIN_FEE_BPS) / 10000).toString());
           acrossParams.set("appFeeRecipient", SWAP_FEE_RECIPIENT);
@@ -433,7 +442,7 @@ export function UnifiedSwap() {
     } finally {
       setLoading(false);
     }
-  }, [address, amount, inputToken, outputToken, fromChainId, toChainId, isSameChain, isInputNative, isOutputNative]);
+  }, [address, amount, inputToken, outputToken, fromChainId, toChainId, isSameChain, isInputNative, isOutputNative, receiveAddress]);
 
   const quoteRefreshRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const fetchQuoteRef = useRef(fetchQuote);
@@ -562,7 +571,7 @@ export function UnifiedSwap() {
         }
         const fresh = await getSwapQuote({
           chainId: fromChainId, sellToken: sellAddr, buyToken: (isOutputNative ? NATIVE_TOKEN_ADDRESS : outputToken.address) as `0x${string}`,
-          sellAmount: swapQuote.sellAmount, taker: address, swapFeeBps: SWAP_FEE_BPS, swapFeeRecipient: SWAP_FEE_RECIPIENT, swapFeeToken: outputToken.address as `0x${string}`, tradeSurplusRecipient: SWAP_FEE_RECIPIENT, slippageBps: 100,
+          sellAmount: swapQuote.sellAmount, taker: address, recipient: receiveAddress, swapFeeBps: SWAP_FEE_BPS, swapFeeRecipient: SWAP_FEE_RECIPIENT, swapFeeToken: outputToken.address as `0x${string}`, tradeSurplusRecipient: SWAP_FEE_RECIPIENT, slippageBps: 100,
         });
         if (!fresh?.transaction) { setError("Quote expired — get a fresh quote and try again"); setSwapping(false); return; }
         setSwapQuote(fresh);
@@ -592,7 +601,7 @@ export function UnifiedSwap() {
         const buyAddr = (isOutputNative ? NATIVE_TOKEN_ADDRESS : outputToken.address) as `0x${string}`;
         const fresh = await getGaslessQuote({
           chainId: fromChainId, sellToken: sellAddr, buyToken: buyAddr, sellAmount: amountWei,
-          taker: address, swapFeeBps: SWAP_FEE_BPS, swapFeeRecipient: SWAP_FEE_RECIPIENT,
+          taker: address, recipient: receiveAddress, swapFeeBps: SWAP_FEE_BPS, swapFeeRecipient: SWAP_FEE_RECIPIENT,
           swapFeeToken: outputToken.address as `0x${string}`, tradeSurplusRecipient: SWAP_FEE_RECIPIENT, slippageBps: 100,
         });
         if (!fresh?.liquidityAvailable) { setError("Quote expired — get a fresh quote and try again"); setSwapping(false); return; }
@@ -673,6 +682,7 @@ export function UnifiedSwap() {
         destinationChainId: String(toChainId),
         depositor: address,
       });
+      if (receiveAddress) acrossParams.set("recipient", receiveAddress);
       if (SWAP_FEE_RECIPIENT) {
         acrossParams.set("appFee", (Number(CROSSCHAIN_FEE_BPS) / 10000).toString());
         acrossParams.set("appFeeRecipient", SWAP_FEE_RECIPIENT);
@@ -734,7 +744,7 @@ export function UnifiedSwap() {
     } finally {
       setSwapping(false);
     }
-  }, [acrossQuote, walletClient, address, publicClient, needsChainSwitch, switchChain, fromChainId, toChainId, amount, inputToken, outputToken, isInputNative, isOutputNative]);
+  }, [acrossQuote, walletClient, address, publicClient, needsChainSwitch, switchChain, fromChainId, toChainId, amount, inputToken, outputToken, isInputNative, isOutputNative, receiveAddress]);
 
   const isQuoteExpiredError = error != null && (
     error.toLowerCase().includes("invalidquotetimestamp") ||
@@ -917,8 +927,34 @@ export function UnifiedSwap() {
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-2 mb-2">
             <span className="text-xs text-slate-400 font-mono">{address ? truncateAddress(address) : ""}</span>
+            {(activeTab === "swap" || activeTab === "bridge") && (
+              <button type="button" onClick={() => setShowCustomRecipient((o) => !o)} className="text-xs text-slate-500 hover:text-white">
+                {showCustomRecipient ? "Hide" : "Custom recipient"}
+              </button>
+            )}
             <button type="button" onClick={() => disconnect()} className="text-xs text-slate-500 hover:text-white">Disconnect</button>
           </div>
+          {(activeTab === "swap" || activeTab === "bridge") && showCustomRecipient && (
+            <div className="mb-4">
+              <input
+                type="text"
+                placeholder="Send output to different address (0x...)"
+                value={customRecipient}
+                onChange={(e) => {
+                  setCustomRecipient(e.target.value);
+                  setQuote(null);
+                  setSwapQuote(null);
+                  setAcrossQuote(null);
+                  setQuoteReceivedAt(null);
+                  setShowSignConfirm(false);
+                }}
+                className="w-full rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] text-white text-sm px-4 py-2.5 placeholder:text-slate-500 focus:ring-1 focus:ring-[var(--swap-accent)]"
+              />
+              {customRecipient.trim() && !isAddress(customRecipient.trim()) && (
+                <p className="text-xs text-amber-400 mt-1">Enter a valid EVM address</p>
+              )}
+            </div>
+          )}
 
           <div>
             <p className="text-xs text-[var(--delta-text-muted)] mb-2">From</p>
