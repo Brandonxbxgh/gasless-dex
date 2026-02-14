@@ -3,8 +3,9 @@
 import { useState, useCallback } from "react";
 import { useAccount, useChainId, useSwitchChain, useWalletClient, useBalance } from "wagmi";
 import { parseUnits, isAddress } from "viem";
+import { normalize } from "viem/ens";
 import { mainnet } from "viem/chains";
-import { createPublicClient, http, getEnsAddress } from "viem";
+import { createPublicClient, http } from "viem";
 import { QRCodeSVG } from "qrcode.react";
 import { CHAINS, TOKENS_BY_CHAIN } from "@/lib/send-tokens";
 
@@ -67,8 +68,7 @@ export function SendReceive({
         chain: mainnet,
         transport: http(process.env.NEXT_PUBLIC_ALCHEMY_ETH_URL || "https://eth.llamarpc.com"),
       });
-      const ensName = name.toLowerCase().replace(/\.eth$/i, "");
-      return await getEnsAddress(client, { name: ensName });
+      return await client.getEnsAddress({ name: normalize(name) });
     } catch {
       return null;
     }
