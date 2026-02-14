@@ -12,6 +12,7 @@ const NAV_ITEMS: { href: string; label: string; external?: boolean }[] = [
   { href: "/portfolio", label: "Portfolio" },
   { href: "/swap/solana", label: "Solana" },
   { href: "/how-it-works", label: "How it works" },
+  { href: "/disclaimer", label: "Disclaimer" },
   { href: SUPPORT_TELEGRAM, label: "Support", external: true },
 ];
 

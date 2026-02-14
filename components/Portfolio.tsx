@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useAccount } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { fetchPortfolioBalances, type PortfolioEntry } from "@/lib/portfolio";
+import { SendReceive } from "@/components/SendReceive";
 
 const EXPLORER_URL: Record<number, string> = {
   1: "https://etherscan.io",
@@ -161,6 +162,9 @@ export function Portfolio() {
   const chainCount = byChain.length;
   const assetCount = entries.length;
 
+  type PortfolioTab = "overview" | "send" | "receive";
+  const [portfolioTab, setPortfolioTab] = useState<PortfolioTab>("overview");
+
   if (!isConnected) {
     return (
       <div className="w-full max-w-2xl mx-auto rounded-3xl border p-6 sm:p-8 bg-[var(--delta-card)] border-[var(--swap-pill-border)] shadow-xl">
@@ -190,7 +194,43 @@ export function Portfolio() {
         </div>
       </div>
 
-      {loading && entries.length === 0 ? (
+      {/* Portfolio tabs: Overview | Send | Receive */}
+      <div className="flex rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] p-1 mb-6">
+        <button
+          type="button"
+          onClick={() => setPortfolioTab("overview")}
+          className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
+            portfolioTab === "overview" ? "bg-[var(--swap-accent)]/20 text-[var(--swap-accent)]" : "text-slate-400 hover:text-white"
+          }`}
+        >
+          Overview
+        </button>
+        <button
+          type="button"
+          onClick={() => setPortfolioTab("send")}
+          className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
+            portfolioTab === "send" ? "bg-[var(--swap-accent)]/20 text-[var(--swap-accent)]" : "text-slate-400 hover:text-white"
+          }`}
+        >
+          Send
+        </button>
+        <button
+          type="button"
+          onClick={() => setPortfolioTab("receive")}
+          className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
+            portfolioTab === "receive" ? "bg-[var(--swap-accent)]/20 text-[var(--swap-accent)]" : "text-slate-400 hover:text-white"
+          }`}
+        >
+          Receive
+        </button>
+      </div>
+
+      {portfolioTab === "send" || portfolioTab === "receive" ? (
+        <SendReceive
+          activeTab={portfolioTab}
+          onTabChange={(tab) => setPortfolioTab(tab)}
+        />
+      ) : loading && entries.length === 0 ? (
         <div className="py-12 text-center text-[var(--delta-text-muted)]">Loading balances…</div>
       ) : error ? (
         <div className="py-12 text-center text-red-400">{error}</div>
