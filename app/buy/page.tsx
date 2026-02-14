@@ -6,11 +6,7 @@ const CHANGELLY_MERCHANT_ID = process.env.NEXT_PUBLIC_CHANGELLY_MERCHANT_ID || "
 
 function buildWidgetUrl(destinationAddress?: string): string {
   const params = new URLSearchParams({
-    from: "usd",
-    to: "eth",
     amount: "100",
-    fromDefault: "usd",
-    toDefault: "eth",
     v: "3",
     type: "no-rev-share",
     color: "fc72ff",
