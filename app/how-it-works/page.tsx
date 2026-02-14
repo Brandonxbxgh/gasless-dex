@@ -26,7 +26,7 @@ export default function HowItWorksPage() {
           How it works
         </h1>
         <p className="text-slate-300 text-lg mb-12">
-          A complete guide to swapping, wrapping, and bridging on DeltaChainLabs.
+          A complete guide to buying crypto, swapping, wrapping, and bridging on DeltaChainLabs.
         </p>
 
         {/* Overview */}
@@ -37,9 +37,13 @@ export default function HowItWorksPage() {
           </h2>
           <div className="rounded-2xl bg-slate-800/50 border border-slate-700/50 p-6 text-slate-200 space-y-4">
             <p>
-              DeltaChainLabs lets you swap tokens, wrap/unwrap native currency, and bridge across chains — all in one interface. Connect your wallet, pick your action, and execute.
+              DeltaChainLabs lets you buy crypto with fiat, swap tokens, wrap/unwrap native currency, and bridge across chains. Connect your wallet, pick your action, and execute.
             </p>
-            <div className="grid sm:grid-cols-3 gap-4 pt-2">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+              <div className="rounded-xl bg-slate-900/60 border border-slate-700/40 p-4">
+                <p className="font-semibold text-white mb-1">Buy</p>
+                <p className="text-sm text-slate-400">Buy crypto with card, bank transfer, or Apple Pay. Powered by Changelly.</p>
+              </div>
               <div className="rounded-xl bg-slate-900/60 border border-slate-700/40 p-4">
                 <p className="font-semibold text-white mb-1">Swap</p>
                 <p className="text-sm text-slate-400">Same-chain token swaps. Gasless for ERC20↔ERC20.</p>
@@ -56,10 +60,32 @@ export default function HowItWorksPage() {
           </div>
         </section>
 
-        {/* Best quotes / DEX aggregation */}
+        {/* Buy tab */}
         <section className="mb-14">
           <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
             <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">2</span>
+            Buy crypto — fiat on-ramp
+          </h2>
+          <div className="rounded-2xl bg-slate-800/50 border border-slate-700/50 p-6 text-slate-200 space-y-4">
+            <p>
+              The <Link href="/buy" className="text-sky-400 hover:underline">Buy</Link> page lets you purchase crypto with fiat (USD, EUR, etc.) using a card, bank transfer, or Apple Pay. Powered by <a href="https://changelly.com" target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline">Changelly</a>.
+            </p>
+            <ul className="space-y-2 text-sm">
+              <li><strong className="text-white">~2% fee</strong> — Changelly&apos;s service fee; no extra app fees.</li>
+              <li><strong className="text-white">Multiple providers</strong> — Changelly routes you to the best offer from MoonPay, Simplex, Banxa, Transak, or Wert based on your region and payment method.</li>
+              <li><strong className="text-white">KYC</strong> — Handled by the provider (e.g. MoonPay) during checkout. We never see or store your identity data.</li>
+              <li><strong className="text-white">Wallet address</strong> — Connect your wallet and we pre-fill the destination address so crypto goes straight to you. You can also paste any address in the widget.</li>
+            </ul>
+            <p className="text-sm text-slate-400">
+              Available in 200+ countries including the US. Processing typically takes 5–40 minutes.
+            </p>
+          </div>
+        </section>
+
+        {/* Best quotes / DEX aggregation */}
+        <section className="mb-14">
+          <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
+            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">3</span>
             We find you the best quotes
           </h2>
           <div className="rounded-2xl bg-slate-800/50 border border-slate-700/50 p-6 text-slate-200 space-y-4">
@@ -78,7 +104,7 @@ export default function HowItWorksPage() {
         {/* Swap Tab */}
         <section className="mb-14">
           <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">3</span>
+            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">4</span>
             Swap tab — same-chain swaps
           </h2>
           <div className="rounded-2xl bg-slate-800/50 border border-slate-700/50 p-6 text-slate-200 space-y-4">
@@ -107,7 +133,7 @@ export default function HowItWorksPage() {
         {/* Wrap Tab */}
         <section className="mb-14">
           <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">4</span>
+            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">5</span>
             Wrap tab — native ↔ wrapped
           </h2>
           <div className="rounded-2xl bg-slate-800/50 border border-slate-700/50 p-6 text-slate-200 space-y-4">
@@ -127,7 +153,7 @@ export default function HowItWorksPage() {
         {/* Bridge Tab */}
         <section className="mb-14">
           <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">5</span>
+            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">6</span>
             Bridge tab — cross-chain swaps
           </h2>
           <div className="rounded-2xl bg-slate-800/50 border border-slate-700/50 p-6 text-slate-200 space-y-4">
@@ -149,7 +175,7 @@ export default function HowItWorksPage() {
         {/* Fees */}
         <section className="mb-14">
           <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">6</span>
+            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">7</span>
             Fees
           </h2>
           <div className="rounded-2xl bg-slate-800/50 border border-slate-700/50 p-6 text-slate-200 space-y-4">
@@ -163,6 +189,11 @@ export default function HowItWorksPage() {
                   </tr>
                 </thead>
                 <tbody className="text-slate-300">
+                  <tr className="border-b border-slate-700/50">
+                    <td className="py-3">Buy crypto (fiat)</td>
+                    <td className="py-3">None</td>
+                    <td className="py-3">~2% Changelly fee; provider fees</td>
+                  </tr>
                   <tr className="border-b border-slate-700/50">
                     <td className="py-3">Same-chain swap</td>
                     <td className="py-3">0.12%</td>
@@ -190,7 +221,7 @@ export default function HowItWorksPage() {
         {/* Tokens: Native vs Wrapped */}
         <section className="mb-14">
           <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">7</span>
+            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">8</span>
             Native vs. wrapped tokens
           </h2>
           <div className="rounded-2xl bg-slate-800/50 border border-slate-700/50 p-6 text-slate-200 space-y-4">
@@ -209,7 +240,7 @@ export default function HowItWorksPage() {
         {/* Allowance */}
         <section className="mb-14">
           <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">8</span>
+            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">9</span>
             Token allowance
           </h2>
           <div className="rounded-2xl bg-slate-800/50 border border-slate-700/50 p-6 text-slate-200 space-y-4">
@@ -227,7 +258,7 @@ export default function HowItWorksPage() {
         {/* Supported chains & tokens */}
         <section className="mb-14">
           <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">9</span>
+            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">10</span>
             Supported chains & tokens
           </h2>
           <div className="rounded-2xl bg-slate-800/50 border border-slate-700/50 overflow-hidden">
@@ -258,7 +289,7 @@ export default function HowItWorksPage() {
         {/* Quote flow */}
         <section className="mb-14">
           <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">10</span>
+            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">11</span>
             Quote flow & tips
           </h2>
           <div className="rounded-2xl bg-slate-800/50 border border-slate-700/50 p-6 text-slate-200 space-y-4">
@@ -278,7 +309,7 @@ export default function HowItWorksPage() {
         {/* Solana */}
         <section className="mb-14">
           <h2 className="text-xl font-semibold text-white mb-4 flex items-center gap-2">
-            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">11</span>
+            <span className="w-8 h-8 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] flex items-center justify-center text-sm font-bold">12</span>
             Solana swaps
           </h2>
           <div className="rounded-2xl bg-slate-800/50 border border-slate-700/50 p-6 text-slate-200 space-y-4">
