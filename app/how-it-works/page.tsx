@@ -56,6 +56,10 @@ export default function HowItWorksPage() {
                 <p className="font-semibold text-white mb-1">Bridge</p>
                 <p className="text-sm text-slate-400">Cross-chain swaps. Powered by Across. ~2–10 seconds.</p>
               </div>
+              <div className="rounded-xl bg-slate-900/60 border border-slate-700/40 p-4">
+                <p className="font-semibold text-white mb-1">Portfolio</p>
+                <p className="text-sm text-slate-400">View balances across all chains with USD values.</p>
+              </div>
             </div>
           </div>
         </section>
