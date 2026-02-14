@@ -6,13 +6,13 @@ import { usePathname } from "next/navigation";
 
 const SUPPORT_TELEGRAM = "https://t.me/brandonxbxgh";
 
-const NAV_ITEMS = [
+const NAV_ITEMS: { href: string; label: string; external?: boolean }[] = [
   { href: "/", label: "Swap" },
   { href: "/buy", label: "Buy" },
   { href: "/swap/solana", label: "Solana" },
   { href: "/how-it-works", label: "How it works" },
   { href: SUPPORT_TELEGRAM, label: "Support", external: true },
-] as const;
+];
 
 function NavLink({
   href,
