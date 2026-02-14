@@ -14,6 +14,7 @@ import {
   type SwapQuoteResponse,
   type SignedApprovalData,
 } from "@/lib/api";
+import { PriceChart } from "@/components/PriceChart";
 import { splitSignature, SignatureType } from "@/lib/signature";
 
 export type SwapTabId = "swap" | "wrap" | "bridge";
@@ -1076,6 +1077,10 @@ export function UnifiedSwap() {
               <p className="text-xs text-slate-400 mt-1">≈ ${outputUsdValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</p>
             )}
           </div>
+
+          {(activeTab === "swap" || activeTab === "bridge") && !effectiveIsWrap && !effectiveIsUnwrap && (
+            <PriceChart symbol={inputToken.symbol} height={120} className="mt-4" />
+          )}
 
           {needsChainSwitch && (
             <div className="rounded-xl bg-amber-500/10 border border-amber-500/30 p-3 space-y-2">

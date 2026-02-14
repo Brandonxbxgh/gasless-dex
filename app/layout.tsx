@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Providers } from "./providers";
 import { Header } from "@/components/Header";
+import { InstallBanner } from "@/components/InstallBanner";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -24,6 +25,7 @@ export default function RootLayout({
           <div className="relative z-10 min-h-screen">
             <Header />
             {children}
+            <InstallBanner />
           </div>
         </Providers>
       </body>
