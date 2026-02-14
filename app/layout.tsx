@@ -4,8 +4,12 @@ import { Header } from "@/components/Header";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "DeltaChainLabs | Gasless Swap",
-  description: "Swap tokens with zero gas. Sign a message, we pay the gas.",
+  title: "DeltaChainLabs | Swap, Bridge & Buy",
+  description: "Swap tokens. Bridge chains. Buy crypto with fiat. All in one place.",
+  openGraph: {
+    title: "DeltaChainLabs | Swap, Bridge & Buy",
+    description: "Swap tokens. Bridge chains. Buy crypto with fiat. All in one place.",
+  },
 };
 
 export default function RootLayout({
