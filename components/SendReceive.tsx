@@ -26,13 +26,7 @@ function isEnsName(value: string): boolean {
   return value.endsWith(".eth") && value.length > 4;
 }
 
-export function SendReceive({
-  activeTab,
-  onTabChange,
-}: {
-  activeTab: "send" | "receive";
-  onTabChange: (tab: "send" | "receive") => void;
-}) {
+export function SendReceive({ activeTab }: { activeTab: "send" | "receive" }) {
   const { address } = useAccount();
   const chainId = useChainId();
   const { switchChain } = useSwitchChain();
@@ -174,33 +168,42 @@ export function SendReceive({
   };
   const explorerUrl = EXPLORER_URL[sendChainId] ?? "https://etherscan.io";
 
+  const resetSend = useCallback(() => {
+    setSendTxHash(null);
+    setSendError(null);
+    setSendAmount("");
+    setSendRecipient("");
+    setResolvedAddress(null);
+  }, []);
+
   return (
     <div className="space-y-6">
-      {/* Tabs */}
-      <div className="flex rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] p-1">
-        <button
-          type="button"
-          onClick={() => onTabChange("send")}
-          className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
-            activeTab === "send" ? "bg-[var(--swap-accent)]/20 text-[var(--swap-accent)]" : "text-slate-400 hover:text-white"
-          }`}
-        >
-          Send
-        </button>
-        <button
-          type="button"
-          onClick={() => onTabChange("receive")}
-          className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
-            activeTab === "receive" ? "bg-[var(--swap-accent)]/20 text-[var(--swap-accent)]" : "text-slate-400 hover:text-white"
-          }`}
-        >
-          Receive
-        </button>
-      </div>
-
       {activeTab === "send" ? (
         /* Send form */
         <div className="space-y-4">
+          {sendTxHash ? (
+            <>
+              <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/30 p-4 text-center">
+                <p className="text-emerald-400 font-semibold text-lg">Successfully sent</p>
+              </div>
+              <a
+                href={`${explorerUrl}/tx/${sendTxHash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full py-3 rounded-xl bg-[var(--swap-pill-bg)] hover:bg-[#3d3d4d] text-sky-400 font-semibold text-center border border-sky-500/30"
+              >
+                View transaction
+              </a>
+              <button
+                type="button"
+                onClick={resetSend}
+                className="w-full rounded-xl bg-[var(--swap-accent)] text-white font-semibold py-3 px-4 hover:opacity-90 transition-opacity"
+              >
+                Send another
+              </button>
+            </>
+          ) : (
+            <>
           <div>
             <label className="block text-xs text-[var(--delta-text-muted)] mb-1.5">Chain</label>
             <select
@@ -303,15 +306,7 @@ export function SendReceive({
             {sending ? "Sending…" : "Send"}
           </button>
           {sendError && <p className="text-sm text-red-400">{sendError}</p>}
-          {sendTxHash && (
-            <a
-              href={`${explorerUrl}/tx/${sendTxHash}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm text-sky-400 hover:underline"
-            >
-              View transaction →
-            </a>
+            </>
           )}
         </div>
       ) : (

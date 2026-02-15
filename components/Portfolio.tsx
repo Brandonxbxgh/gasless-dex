@@ -226,10 +226,7 @@ export function Portfolio() {
       </div>
 
       {portfolioTab === "send" || portfolioTab === "receive" ? (
-        <SendReceive
-          activeTab={portfolioTab}
-          onTabChange={(tab) => setPortfolioTab(tab)}
-        />
+        <SendReceive activeTab={portfolioTab} />
       ) : loading && entries.length === 0 ? (
         <div className="py-12 text-center text-[var(--delta-text-muted)]">Loading balances…</div>
       ) : error ? (
