@@ -62,7 +62,10 @@ export async function GET(request: NextRequest) {
         const url = `${EXPLORER_API[chainId]}?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=15&sort=desc&apikey=${apiKey}`;
         const res = await fetch(url, { next: { revalidate: 30 } });
         const data = (await res.json()) as { status: string; result?: ExplorerTx[]; message?: string };
-        if (data.status !== "1" || !Array.isArray(data.result)) return [];
+        if (data.status !== "1" || !Array.isArray(data.result)) {
+          console.warn(`[wallet-history] chain ${chainId} failed:`, data.message ?? data.result ?? "unknown");
+          return [];
+        }
         return (data.result as ExplorerTx[]).map((tx) => ({
           hash: tx.hash,
           chainId,
