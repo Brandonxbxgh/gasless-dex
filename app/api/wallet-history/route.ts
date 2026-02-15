@@ -1,15 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
-const EXPLORER_API: Record<number, string> = {
-  1: "https://api.etherscan.io/api",
-  8453: "https://api.basescan.org/api",
-  42161: "https://api.arbiscan.io/api",
-  137: "https://api.polygonscan.com/api",
-  10: "https://api-optimistic.etherscan.io/api",
-  56: "https://api.bscscan.com/api",
-};
-
+const ETHERSCAN_V2_API = "https://api.etherscan.io/v2/api";
 const CHAIN_IDS = [1, 8453, 42161, 137, 10, 56] as const;
 
 type ExplorerTx = {
@@ -50,8 +42,7 @@ export async function GET(request: NextRequest) {
   }
 
   const fetchChain = async (chainId: number) => {
-    const key = chainId === 56 ? (process.env.BSCSCAN_API_KEY ?? apiKey) : apiKey;
-    const url = `${EXPLORER_API[chainId]}?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=15&sort=desc&apikey=${key}`;
+    const url = `${ETHERSCAN_V2_API}?chainid=${chainId}&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=15&sort=desc&apikey=${apiKey}`;
     const res = await fetch(url, { next: { revalidate: 30 } });
     const data = (await res.json()) as { status: string; result?: ExplorerTx[] | string; message?: string };
     if (data.status !== "1" || !Array.isArray(data.result)) {
