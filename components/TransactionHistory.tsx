@@ -48,6 +48,12 @@ type OurTx = {
   created_at: string;
 };
 
+type TokenTransferDisplay = {
+  direction: "sent" | "received";
+  amount: string;
+  symbol: string;
+};
+
 type WalletHistoryTx = {
   hash: string;
   chainId: number;
@@ -57,6 +63,7 @@ type WalletHistoryTx = {
   value: string;
   isError: boolean;
   viaDeltaChain?: OurTx;
+  tokenTransfers?: TokenTransferDisplay[];
 };
 
 function formatTimeAgo(ts: number) {
@@ -102,6 +109,15 @@ function formatAction(tx: WalletHistoryTx): string {
       default:
         return action_type;
     }
+  }
+  if (tx.tokenTransfers?.length) {
+    const sent = tx.tokenTransfers.filter((t) => t.direction === "sent");
+    const received = tx.tokenTransfers.filter((t) => t.direction === "received");
+    if (sent.length && received.length) {
+      return `${sent.map((t) => `${t.amount} ${t.symbol}`).join(", ")} → ${received.map((t) => `${t.amount} ${t.symbol}`).join(", ")}`;
+    }
+    if (sent.length) return `Sent ${sent.map((t) => `${t.amount} ${t.symbol}`).join(", ")}`;
+    if (received.length) return `Received ${received.map((t) => `${t.amount} ${t.symbol}`).join(", ")}`;
   }
   const val = BigInt(tx.value);
   if (val > BigInt(0)) return "Transfer";
@@ -168,7 +184,8 @@ export function TransactionHistory() {
     if (price == null || price <= 0) return null;
     const amount = Number(formatUnits(val, 18));
     const usd = amount * price;
-    if (usd < 0.01) return null;
+    if (usd < 0.0001) return null;
+    if (usd < 0.01) return "<$0.01";
     return `$${usd < 1 ? usd.toFixed(2) : usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
@@ -197,7 +214,13 @@ export function TransactionHistory() {
             const txId = `${tx.chainId}-${tx.hash}`;
             const isExpanded = expandedId === txId;
             const explorerUrl = `${EXPLORER_URL[tx.chainId] ?? "https://etherscan.io"}/tx/${tx.hash}`;
-            const actionLabel = tx.viaDeltaChain ? getActionLabel(tx.viaDeltaChain.action_type) : (BigInt(tx.value) > BigInt(0) ? "Transfer" : "Transaction");
+            const actionLabel = tx.viaDeltaChain
+              ? getActionLabel(tx.viaDeltaChain.action_type)
+              : tx.tokenTransfers?.length
+                ? (tx.tokenTransfers.some((t) => t.direction === "sent") && tx.tokenTransfers.some((t) => t.direction === "received") ? "Swap" : tx.tokenTransfers.some((t) => t.direction === "sent") ? "Send" : "Receive")
+                : BigInt(tx.value) > BigInt(0)
+                  ? "Transfer"
+                  : "Transaction";
             const nativeAmount = formatNativeAmount(tx.value, tx.chainId);
             const usdAmount = getUsdForNative(tx.value, tx.chainId);
 
@@ -246,11 +269,13 @@ export function TransactionHistory() {
                     </div>
                   </div>
 
-                  {(tx.viaDeltaChain?.from_amount || nativeAmount) && !isExpanded && (
+                  {(tx.viaDeltaChain?.from_amount || nativeAmount || tx.tokenTransfers?.length) && !isExpanded && (
                     <p className="text-sm text-slate-300 mt-2">
                       {tx.viaDeltaChain?.from_amount
                         ? `${tx.viaDeltaChain.from_amount} ${tx.viaDeltaChain.from_token ?? ""}`
-                        : nativeAmount}
+                        : tx.tokenTransfers?.length
+                          ? tx.tokenTransfers.map((t) => `${t.amount} ${t.symbol}`).join(" · ")
+                          : nativeAmount}
                       {(tx.viaDeltaChain?.from_amount_usd || usdAmount) && (
                         <span className="ml-2 text-emerald-400/90">
                           {tx.viaDeltaChain?.from_amount_usd ? `$${tx.viaDeltaChain.from_amount_usd}` : usdAmount}
@@ -303,6 +328,23 @@ export function TransactionHistory() {
                                 </span>
                               )}
                             </p>
+                          </div>
+                        </>
+                      ) : tx.tokenTransfers?.length ? (
+                        <>
+                          {tx.tokenTransfers.map((t, i) => (
+                            <div key={i}>
+                              <p className="text-xs text-[var(--delta-text-muted)] uppercase tracking-wide mb-0.5">
+                                {t.direction === "sent" ? "Sent" : "Received"}
+                              </p>
+                              <p className="text-white font-medium">
+                                {t.amount} {t.symbol}
+                              </p>
+                            </div>
+                          ))}
+                          <div className="sm:col-span-2">
+                            <p className="text-xs text-[var(--delta-text-muted)] uppercase tracking-wide mb-0.5">Blockchain</p>
+                            <p className="text-white font-medium">{CHAIN_NAME[tx.chainId] ?? `Chain ${tx.chainId}`}</p>
                           </div>
                         </>
                       ) : (
