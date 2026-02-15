@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { useAccount, useChainId, useSwitchChain, useWalletClient, usePublicClient } from "wagmi";
+import { useAccount, useChainId, useSwitchChain, useWalletClient, usePublicClient, useBalance, useReadContract } from "wagmi";
 import { parseUnits, formatUnits } from "viem";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 
@@ -87,6 +87,24 @@ export function CrossChainSwap() {
 
   const inputTokens = TOKENS_BY_CHAIN[originChainId] ?? TOKENS_BY_CHAIN[1];
   const outputTokens = TOKENS_BY_CHAIN[destChainId] ?? TOKENS_BY_CHAIN[8453];
+
+  const isInputNative = inputToken.isNative;
+  const { data: inputNativeBalance } = useBalance({
+    address: isInputNative ? address : undefined,
+    chainId: originChainId,
+  });
+  const { data: inputTokenBalance } = useReadContract({
+    address: !isInputNative ? (inputToken.address as `0x${string}`) : undefined,
+    abi: [{ inputs: [{ name: "account", type: "address" }], name: "balanceOf", outputs: [{ type: "uint256" }], stateMutability: "view", type: "function" }],
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    chainId: originChainId,
+  });
+  const inputBalanceFormatted = isInputNative && inputNativeBalance?.value != null
+    ? formatUnits(inputNativeBalance.value, 18)
+    : inputTokenBalance != null && typeof inputTokenBalance === "bigint"
+      ? formatUnits(inputTokenBalance, inputToken.decimals)
+      : null;
 
   useEffect(() => {
     if (originChainId === destChainId) {
@@ -217,6 +235,9 @@ export function CrossChainSwap() {
                 ))}
               </select>
             </div>
+            {inputBalanceFormatted != null && (
+              <p className="text-xs text-slate-500 mt-1">Balance: {parseFloat(inputBalanceFormatted).toLocaleString("en-US", { maximumFractionDigits: 6 })} {inputToken.symbol}</p>
+            )}
           </div>
 
           <div>

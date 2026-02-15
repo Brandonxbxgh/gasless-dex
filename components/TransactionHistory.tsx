@@ -21,7 +21,7 @@ const CHAIN_NAME: Record<number, string> = {
   56: "BNB",
 };
 
-type StoredTx = {
+type OurTx = {
   id: string;
   tx_hash: string;
   chain_id: number;
@@ -34,42 +34,58 @@ type StoredTx = {
   created_at: string;
 };
 
-function formatDate(iso: string) {
-  const d = new Date(iso);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
+type WalletHistoryTx = {
+  hash: string;
+  chainId: number;
+  timeStamp: number;
+  from: string;
+  to: string;
+  value: string;
+  isError: boolean;
+  viaDeltaChain?: OurTx;
+};
+
+function formatTimeAgo(ts: number) {
+  const now = Math.floor(Date.now() / 1000);
+  const diff = now - ts;
+  const diffMins = Math.floor(diff / 60);
+  const diffHours = Math.floor(diff / 3600);
+  const diffDays = Math.floor(diff / 86400);
   if (diffMins < 1) return "Just now";
   if (diffMins < 60) return `${diffMins}m ago`;
   if (diffHours < 24) return `${diffHours}h ago`;
   if (diffDays < 7) return `${diffDays}d ago`;
-  return d.toLocaleDateString();
+  return new Date(ts * 1000).toLocaleDateString();
 }
 
-function formatAction(action: string, fromToken?: string | null, toToken?: string | null, fromChain?: number | null, toChain?: number | null) {
-  const from = fromToken ?? "?";
-  const to = toToken ?? "?";
-  switch (action) {
-    case "swap":
-      return `${from} → ${to}`;
-    case "bridge":
-      return `${from} → ${to}${fromChain && toChain ? ` (${CHAIN_NAME[fromChain] ?? fromChain} → ${CHAIN_NAME[toChain] ?? toChain})` : ""}`;
-    case "send":
-      return `Sent ${from}`;
-    case "wrap":
-      return `${from} → ${to}`;
-    case "unwrap":
-      return `${from} → ${to}`;
-    default:
-      return action;
+function formatAction(tx: WalletHistoryTx): string {
+  if (tx.viaDeltaChain) {
+    const { action_type, from_token, to_token, from_chain_id, to_chain_id } = tx.viaDeltaChain;
+    const from = from_token ?? "?";
+    const to = to_token ?? "?";
+    switch (action_type) {
+      case "swap":
+        return `${from} → ${to}`;
+      case "bridge":
+        return `${from} → ${to}${from_chain_id && to_chain_id ? ` (${CHAIN_NAME[from_chain_id] ?? from_chain_id} → ${CHAIN_NAME[to_chain_id] ?? to_chain_id})` : ""}`;
+      case "send":
+        return `Sent ${from}`;
+      case "wrap":
+        return `${from} → ${to}`;
+      case "unwrap":
+        return `${from} → ${to}`;
+      default:
+        return action_type;
+    }
   }
+  const val = BigInt(tx.value);
+  if (val > BigInt(0)) return "Transfer";
+  return "Transaction";
 }
 
 export function TransactionHistory() {
   const { address } = useAccount();
-  const [txs, setTxs] = useState<StoredTx[]>([]);
+  const [txs, setTxs] = useState<WalletHistoryTx[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,7 +96,7 @@ export function TransactionHistory() {
     }
     setLoading(true);
     setError(null);
-    fetch(`/api/transactions?address=${encodeURIComponent(address)}`)
+    fetch(`/api/wallet-history?address=${encodeURIComponent(address)}`)
       .then((r) => r.json())
       .then((data) => {
         if (data.error) throw new Error(data.error);
@@ -98,7 +114,7 @@ export function TransactionHistory() {
   return (
     <div className="space-y-4">
       <p className="text-xs text-[var(--delta-text-muted)]">
-        Transactions performed through DeltaChainLabs
+        All recent transactions. Ones performed through our site are marked.
       </p>
       {loading ? (
         <p className="text-sm text-[var(--delta-text-muted)] py-4 text-center">Loading…</p>
@@ -106,29 +122,34 @@ export function TransactionHistory() {
         <p className="text-sm text-red-400 py-4 text-center">{error}</p>
       ) : txs.length === 0 ? (
         <p className="text-sm text-[var(--delta-text-muted)] py-4 text-center">
-          No transactions yet. Swaps, bridges, and sends will appear here.
+          No transactions found. Swaps, bridges, and sends will appear here.
         </p>
       ) : (
-        <div className="space-y-2 max-h-[320px] overflow-y-auto">
+        <div className="space-y-2 max-h-[400px] overflow-y-auto">
           {txs.map((tx) => (
             <a
-              key={tx.id}
-              href={`${EXPLORER_URL[tx.chain_id] ?? "https://etherscan.io"}/tx/${tx.tx_hash}`}
+              key={`${tx.chainId}-${tx.hash}`}
+              href={`${EXPLORER_URL[tx.chainId] ?? "https://etherscan.io"}/tx/${tx.hash}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-between gap-3 rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] px-4 py-3 hover:border-[var(--swap-accent)]/30 transition-colors"
             >
               <div className="min-w-0">
                 <p className="text-white font-medium truncate">
-                  {formatAction(tx.action_type, tx.from_token, tx.to_token, tx.from_chain_id, tx.to_chain_id)}
+                  {formatAction(tx)}
+                  {tx.isError && <span className="text-red-400 ml-1">(failed)</span>}
                 </p>
                 <p className="text-xs text-[var(--delta-text-muted)]">
-                  {formatDate(tx.created_at)} · {CHAIN_NAME[tx.chain_id] ?? `Chain ${tx.chain_id}`}
+                  {formatTimeAgo(tx.timeStamp)} · {CHAIN_NAME[tx.chainId] ?? `Chain ${tx.chainId}`}
                 </p>
               </div>
-              <span className="shrink-0 text-xs px-2 py-0.5 rounded-md bg-[var(--swap-accent)]/20 text-[var(--swap-accent)]">
-                via DeltaChainLabs
-              </span>
+              {tx.viaDeltaChain ? (
+                <span className="shrink-0 text-xs px-2 py-0.5 rounded-md bg-[var(--swap-accent)]/20 text-[var(--swap-accent)]">
+                  via DeltaChainLabs
+                </span>
+              ) : (
+                <span className="shrink-0 text-xs text-slate-500">—</span>
+              )}
             </a>
           ))}
         </div>

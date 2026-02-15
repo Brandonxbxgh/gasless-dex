@@ -47,6 +47,12 @@ export function SendReceive({ activeTab }: { activeTab: "send" | "receive" }) {
   const [receiveChainId, setReceiveChainId] = useState(8453);
   const [receiveToken, setReceiveToken] = useState(TOKENS_BY_CHAIN[8453]?.[1] ?? { address: "", symbol: "USDC", decimals: 6 });
 
+  const { data: receiveBalance } = useBalance({
+    address: address ?? undefined,
+    chainId: receiveChainId,
+    token: receiveToken.isNative ? undefined : (receiveToken.address as `0x${string}`),
+  });
+
   const tokensForSend = TOKENS_BY_CHAIN[sendChainId] ?? TOKENS_BY_CHAIN[1];
   const tokensForReceive = TOKENS_BY_CHAIN[receiveChainId] ?? TOKENS_BY_CHAIN[1];
 
@@ -337,7 +343,14 @@ export function SendReceive({ activeTab }: { activeTab: "send" | "receive" }) {
             </select>
           </div>
           <div>
-            <label className="block text-xs text-[var(--delta-text-muted)] mb-1.5">Token to receive</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs text-[var(--delta-text-muted)]">Token to receive</label>
+              {receiveBalance?.formatted != null && (
+                <span className="text-xs text-slate-400">
+                  Balance: {receiveBalance.formatted} {receiveToken.symbol}
+                </span>
+              )}
+            </div>
             <select
               value={receiveToken.symbol}
               onChange={(e) => {

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { VersionedTransaction } from "@solana/web3.js";
+import { VersionedTransaction, PublicKey } from "@solana/web3.js";
 import { SOLANA_TOKENS, SOL_MINT, USDC_MINT } from "@/lib/solana-tokens";
 
 export function SolanaSwap() {
@@ -21,6 +21,46 @@ export function SolanaSwap() {
   const sellToken = SOLANA_TOKENS.find((t) => t.mint === sellMint);
   const buyToken = SOLANA_TOKENS.find((t) => t.mint === buyMint);
   const amountRaw = amount && sellToken ? Math.floor(parseFloat(amount) * Math.pow(10, sellToken.decimals)) : 0;
+
+  const [sellBalance, setSellBalance] = useState<string | null>(null);
+  const [buyBalance, setBuyBalance] = useState<string | null>(null);
+  useEffect(() => {
+    if (!publicKey || !connection) {
+      setSellBalance(null);
+      setBuyBalance(null);
+      return;
+    }
+    let cancelled = false;
+    const fetchBalances = async () => {
+      try {
+        if (sellMint === SOL_MINT) {
+          const bal = await connection.getBalance(publicKey);
+          if (!cancelled) setSellBalance((bal / 1e9).toLocaleString("en-US", { maximumFractionDigits: 9 }));
+        } else {
+          const accounts = await connection.getParsedTokenAccountsByOwner(publicKey, { mint: new PublicKey(sellMint) });
+          const info = accounts.value[0]?.account?.data?.parsed?.info;
+          const uiAmt = info?.tokenAmount?.uiAmount ?? 0;
+          if (!cancelled) setSellBalance(Number(uiAmt).toLocaleString("en-US", { maximumFractionDigits: 9 }));
+        }
+        if (buyMint === SOL_MINT) {
+          const bal = await connection.getBalance(publicKey);
+          if (!cancelled) setBuyBalance((bal / 1e9).toLocaleString("en-US", { maximumFractionDigits: 9 }));
+        } else {
+          const accounts = await connection.getParsedTokenAccountsByOwner(publicKey, { mint: new PublicKey(buyMint) });
+          const info = accounts.value[0]?.account?.data?.parsed?.info;
+          const uiAmt = info?.tokenAmount?.uiAmount ?? 0;
+          if (!cancelled) setBuyBalance(Number(uiAmt).toLocaleString("en-US", { maximumFractionDigits: 9 }));
+        }
+      } catch {
+        if (!cancelled) {
+          setSellBalance(null);
+          setBuyBalance(null);
+        }
+      }
+    };
+    fetchBalances();
+    return () => { cancelled = true; };
+  }, [publicKey, connection, sellMint, buyMint]);
 
   const fetchQuote = useCallback(async () => {
     if (!amountRaw || amountRaw <= 0) return;
@@ -90,7 +130,12 @@ export function SolanaSwap() {
       ) : (
         <div className="space-y-4">
           <div className="rounded-2xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] p-4">
-            <p className="text-xs text-[var(--delta-text-muted)] mb-2">Sell</p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-[var(--delta-text-muted)]">Sell</p>
+              {sellBalance != null && sellToken && (
+                <span className="text-xs text-slate-400">Balance: {sellBalance} {sellToken.symbol}</span>
+              )}
+            </div>
             <div className="flex items-center gap-3">
               <input
                 type="text"
@@ -117,7 +162,12 @@ export function SolanaSwap() {
           </div>
 
           <div className="rounded-2xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] p-4">
-            <p className="text-xs text-[var(--delta-text-muted)] mb-2">Buy</p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-[var(--delta-text-muted)]">Buy</p>
+              {buyBalance != null && buyToken && (
+                <span className="text-xs text-slate-400">Balance: {buyBalance} {buyToken.symbol}</span>
+              )}
+            </div>
             <div className="flex items-center gap-3">
               <div className="flex-1 text-white text-2xl font-medium">{outAmountFormatted}</div>
               <select
