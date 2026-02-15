@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useAccount, useChainId, useSwitchChain, useWalletClient, useBalance } from "wagmi";
 import { parseUnits, isAddress } from "viem";
 import { normalize } from "viem/ens";
@@ -60,6 +60,28 @@ export function SendReceive({
     chainId: sendChainId,
     token: sendToken.isNative ? undefined : (sendToken.address as `0x${string}`),
   });
+
+  const [tokenPriceUsd, setTokenPriceUsd] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    setTokenPriceUsd(null);
+    const sym = sendToken.symbol;
+    if (!sym) return;
+    fetch(`/api/coingecko/simple-price?symbols=${sym}`)
+      .then((r) => r.json())
+      .then((data: Record<string, number>) => {
+        if (!cancelled) setTokenPriceUsd(data[sym] ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setTokenPriceUsd(null);
+      });
+    return () => { cancelled = true; };
+  }, [sendToken.symbol]);
+
+  const sendAmountNum = sendAmount ? parseFloat(sendAmount) : 0;
+  const sendAmountUsd = tokenPriceUsd != null && !Number.isNaN(sendAmountNum) && sendAmountNum > 0
+    ? sendAmountNum * tokenPriceUsd
+    : null;
 
   const resolveEns = useCallback(async (name: string) => {
     if (!name.endsWith(".eth")) return null;
@@ -199,7 +221,14 @@ export function SendReceive({
             </select>
           </div>
           <div>
-            <label className="block text-xs text-[var(--delta-text-muted)] mb-1.5">Token</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs text-[var(--delta-text-muted)]">Token</label>
+              {sendBalance?.formatted != null && (
+                <span className="text-xs text-slate-400">
+                  Balance: {sendBalance.formatted} {sendToken.symbol}
+                </span>
+              )}
+            </div>
             <select
               value={sendToken.symbol}
               onChange={(e) => {
@@ -236,6 +265,11 @@ export function SendReceive({
               onChange={(e) => setSendAmount(e.target.value.replace(/[^0-9.]/g, ""))}
               className="w-full rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] px-4 py-3 text-white placeholder-slate-500"
             />
+            {sendAmountUsd != null && (
+              <p className="mt-1.5 text-xs text-[var(--delta-text-muted)]">
+                ≈ ${sendAmountUsd.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-xs text-[var(--delta-text-muted)] mb-1.5">Recipient (address or ENS)</label>
