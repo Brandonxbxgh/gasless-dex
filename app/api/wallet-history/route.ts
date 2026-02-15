@@ -1,8 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { TOKENS_BY_CHAIN } from "@/lib/swap-constants";
 
 const ETHERSCAN_V2_API = "https://api.etherscan.io/v2/api";
 const CHAIN_IDS = [1, 8453, 42161, 137, 10, 56] as const;
+
+const KNOWN_TOKEN_SYMBOLS: Record<string, string> = {};
+for (const chainId of CHAIN_IDS) {
+  const tokens = TOKENS_BY_CHAIN[chainId as (typeof CHAIN_IDS)[number]];
+  if (tokens) {
+    for (const t of tokens) {
+      if (t.address && t.symbol && !t.address.startsWith("0xEee")) {
+        KNOWN_TOKEN_SYMBOLS[t.address.toLowerCase()] = t.symbol;
+      }
+    }
+  }
+}
 
 type ExplorerTx = {
   hash: string;
@@ -30,12 +43,14 @@ type TokenTransfer = {
   value: string;
   tokenSymbol: string;
   tokenDecimal: string;
+  contractAddress?: string;
 };
 
 type TokenTransferDisplay = {
   direction: "sent" | "received";
   amount: string;
   symbol: string;
+  contractAddress?: string;
 };
 
 export async function GET(request: NextRequest) {
@@ -77,7 +92,7 @@ export async function GET(request: NextRequest) {
   };
 
   const fetchChainTxs = async (chainId: number) => {
-    const url = `${ETHERSCAN_V2_API}?chainid=${chainId}&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=15&sort=desc&apikey=${apiKey}`;
+    const url = `${ETHERSCAN_V2_API}?chainid=${chainId}&module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=25&sort=desc&apikey=${apiKey}`;
     const res = await fetch(url, { next: { revalidate: 30 } });
     const data = (await res.json()) as { status: string; result?: ExplorerTx[] | string; message?: string };
     if (data.status !== "1" || !Array.isArray(data.result)) {
@@ -106,7 +121,7 @@ export async function GET(request: NextRequest) {
   };
 
   const fetchChainTokenTxs = async (chainId: number): Promise<TokenTransfer[]> => {
-    const url = `${ETHERSCAN_V2_API}?chainid=${chainId}&module=account&action=tokentx&address=${address}&startblock=0&endblock=99999999&page=1&offset=50&sort=desc&apikey=${apiKey}`;
+    const url = `${ETHERSCAN_V2_API}?chainid=${chainId}&module=account&action=tokentx&address=${address}&startblock=0&endblock=99999999&page=1&offset=100&sort=desc&apikey=${apiKey}`;
     const res = await fetch(url, { next: { revalidate: 30 } });
     const data = (await res.json()) as { status: string; result?: TokenTransfer[] | string; message?: string };
     if (data.status !== "1" || !Array.isArray(data.result)) return [];
@@ -152,7 +167,15 @@ export async function GET(request: NextRequest) {
         const existing = tokenTxByHash.get(key) ?? [];
         const direction = tt.from.toLowerCase() === addrLower ? "sent" : "received";
         const amount = formatTokenAmount(tt.value, tt.tokenDecimal);
-        existing.push({ direction, amount, symbol: tt.tokenSymbol || "?" });
+        const contractAddr = (tt as { contractAddress?: string }).contractAddress?.toLowerCase();
+        const symbol = (contractAddr && KNOWN_TOKEN_SYMBOLS[contractAddr]) || tt.tokenSymbol || "?";
+        const same = existing.find((e) => e.direction === direction && e.symbol === symbol && (e.contractAddress ?? "") === (contractAddr ?? ""));
+        if (same) {
+          const a = parseFloat(same.amount) + parseFloat(amount);
+          same.amount = a >= 1000 ? a.toLocaleString(undefined, { maximumFractionDigits: 2 }) : a >= 1 ? a.toFixed(4) : a >= 0.0001 ? a.toFixed(6) : a.toString();
+        } else {
+          existing.push({ direction, amount, symbol, contractAddress: contractAddr });
+        }
         tokenTxByHash.set(key, existing);
       }
     }
@@ -219,6 +242,24 @@ export async function GET(request: NextRequest) {
           internalTransfers: internalTxByHash.get(key),
         });
       }
+    }
+
+    for (const t of ourTxs) {
+      const key = `${t.chain_id}:${t.tx_hash.toLowerCase()}`;
+      if (txKeysSeen.has(key)) continue;
+      txKeysSeen.add(key);
+      allTxs.push({
+        hash: t.tx_hash,
+        chainId: t.chain_id,
+        timeStamp: Math.floor(new Date(t.created_at).getTime() / 1000),
+        from: address,
+        to: "",
+        value: "0",
+        isError: false,
+        viaDeltaChain: t,
+        tokenTransfers: tokenTxByHash.get(key),
+        internalTransfers: internalTxByHash.get(key),
+      });
     }
 
     allTxs.sort((a, b) => b.timeStamp - a.timeStamp);
