@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useAccount } from "wagmi";
+import { formatUnits } from "viem";
 
 const EXPLORER_URL: Record<number, string> = {
   1: "https://etherscan.io",
@@ -18,6 +19,15 @@ const CHAIN_NAME: Record<number, string> = {
   42161: "Arbitrum",
   137: "Polygon",
   10: "Optimism",
+  56: "BNB",
+};
+
+const NATIVE_SYMBOL: Record<number, string> = {
+  1: "ETH",
+  8453: "ETH",
+  42161: "ETH",
+  137: "MATIC",
+  10: "ETH",
   56: "BNB",
 };
 
@@ -58,6 +68,17 @@ function formatTimeAgo(ts: number) {
   return new Date(ts * 1000).toLocaleDateString();
 }
 
+function getActionLabel(actionType: string): string {
+  const labels: Record<string, string> = {
+    swap: "Swap",
+    bridge: "Bridge",
+    send: "Send",
+    wrap: "Wrap",
+    unwrap: "Unwrap",
+  };
+  return labels[actionType] ?? actionType;
+}
+
 function formatAction(tx: WalletHistoryTx): string {
   if (tx.viaDeltaChain) {
     const { action_type, from_token, to_token, from_chain_id, to_chain_id } = tx.viaDeltaChain;
@@ -83,11 +104,24 @@ function formatAction(tx: WalletHistoryTx): string {
   return "Transaction";
 }
 
+function formatNativeAmount(value: string, chainId: number): string | null {
+  const val = BigInt(value);
+  if (val === BigInt(0)) return null;
+  const sym = NATIVE_SYMBOL[chainId] ?? "ETH";
+  const formatted = formatUnits(val, 18);
+  const num = parseFloat(formatted);
+  if (num >= 1000) return `${num.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${sym}`;
+  if (num >= 1) return `${num.toFixed(4)} ${sym}`;
+  if (num >= 0.0001) return `${num.toFixed(6)} ${sym}`;
+  return `${formatted} ${sym}`;
+}
+
 export function TransactionHistory() {
   const { address } = useAccount();
   const [txs, setTxs] = useState<WalletHistoryTx[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [prices, setPrices] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!address) {
@@ -109,6 +143,25 @@ export function TransactionHistory() {
       .finally(() => setLoading(false));
   }, [address]);
 
+  useEffect(() => {
+    fetch("/api/coingecko/simple-price?symbols=ETH,MATIC,BNB")
+      .then((r) => r.json())
+      .then((data) => setPrices(data ?? {}))
+      .catch(() => {});
+  }, []);
+
+  const getUsdForNative = (value: string, chainId: number): string | null => {
+    const val = BigInt(value);
+    if (val === BigInt(0)) return null;
+    const sym = NATIVE_SYMBOL[chainId] ?? "ETH";
+    const price = prices[sym];
+    if (price == null || price <= 0) return null;
+    const amount = Number(formatUnits(val, 18));
+    const usd = amount * price;
+    if (usd < 0.01) return null;
+    return `$${usd < 1 ? usd.toFixed(2) : usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
   if (!address) return null;
 
   return (
@@ -126,32 +179,54 @@ export function TransactionHistory() {
         </p>
       ) : (
         <div className="space-y-2 max-h-[400px] overflow-y-auto">
-          {txs.map((tx) => (
-            <a
-              key={`${tx.chainId}-${tx.hash}`}
-              href={`${EXPLORER_URL[tx.chainId] ?? "https://etherscan.io"}/tx/${tx.hash}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-between gap-3 rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] px-4 py-3 hover:border-[var(--swap-accent)]/30 transition-colors"
-            >
-              <div className="min-w-0">
-                <p className="text-white font-medium truncate">
-                  {formatAction(tx)}
-                  {tx.isError && <span className="text-red-400 ml-1">(failed)</span>}
-                </p>
-                <p className="text-xs text-[var(--delta-text-muted)]">
-                  {formatTimeAgo(tx.timeStamp)} · {CHAIN_NAME[tx.chainId] ?? `Chain ${tx.chainId}`}
-                </p>
+          {txs.map((tx) => {
+            const explorerUrl = `${EXPLORER_URL[tx.chainId] ?? "https://etherscan.io"}/tx/${tx.hash}`;
+            const actionLabel = tx.viaDeltaChain ? getActionLabel(tx.viaDeltaChain.action_type) : (BigInt(tx.value) > BigInt(0) ? "Transfer" : "Transaction");
+            const nativeAmount = formatNativeAmount(tx.value, tx.chainId);
+            const usdAmount = getUsdForNative(tx.value, tx.chainId);
+            return (
+              <div
+                key={`${tx.chainId}-${tx.hash}`}
+                className="flex flex-col gap-2 rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] px-4 py-3 hover:border-[var(--swap-accent)]/30 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-medium px-2 py-0.5 rounded bg-white/10 text-slate-300">
+                        {actionLabel}
+                      </span>
+                      {tx.viaDeltaChain && (
+                        <span className="text-xs px-2 py-0.5 rounded-md bg-[var(--swap-accent)]/20 text-[var(--swap-accent)]">
+                          via DeltaChainLabs
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-white font-medium mt-1 truncate">
+                      {formatAction(tx)}
+                      {tx.isError && <span className="text-red-400 ml-1">(failed)</span>}
+                    </p>
+                    <p className="text-xs text-[var(--delta-text-muted)] mt-0.5">
+                      {formatTimeAgo(tx.timeStamp)} · {CHAIN_NAME[tx.chainId] ?? `Chain ${tx.chainId}`}
+                    </p>
+                  </div>
+                  <a
+                    href={explorerUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] hover:bg-[var(--swap-accent)]/30 transition-colors"
+                  >
+                    View tx
+                  </a>
+                </div>
+                {(nativeAmount || usdAmount) && (
+                  <p className="text-xs text-[var(--delta-text-muted)]">
+                    {nativeAmount}
+                    {usdAmount && <span className="ml-2 text-emerald-400/90">{usdAmount}</span>}
+                  </p>
+                )}
               </div>
-              {tx.viaDeltaChain ? (
-                <span className="shrink-0 text-xs px-2 py-0.5 rounded-md bg-[var(--swap-accent)]/20 text-[var(--swap-accent)]">
-                  via DeltaChainLabs
-                </span>
-              ) : (
-                <span className="shrink-0 text-xs text-slate-500">—</span>
-              )}
-            </a>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
