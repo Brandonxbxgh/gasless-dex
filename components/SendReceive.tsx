@@ -148,7 +148,8 @@ export function SendReceive({ activeTab }: { activeTab: "send" | "receive" }) {
         });
       }
       setSendTxHash(hash);
-      recordTransaction({ txHash: hash, chainId: sendChainId, address, actionType: "send", fromToken: sendToken.symbol });
+      const fromUsd = sendAmountUsd != null ? sendAmountUsd.toFixed(2) : undefined;
+      recordTransaction({ txHash: hash, chainId: sendChainId, address, actionType: "send", fromToken: sendToken.symbol, fromAmount: sendAmount, fromAmountUsd: fromUsd });
       setSendAmount("");
       setSendRecipient("");
       setResolvedAddress(null);
@@ -157,7 +158,7 @@ export function SendReceive({ activeTab }: { activeTab: "send" | "receive" }) {
     } finally {
       setSending(false);
     }
-  }, [walletClient, address, recipientAddress, sendAmount, sendToken, chainId, sendChainId, switchChain]);
+  }, [walletClient, address, recipientAddress, sendAmount, sendToken, sendAmountUsd, chainId, sendChainId, switchChain]);
 
   const copyAddress = useCallback(() => {
     if (!address) return;

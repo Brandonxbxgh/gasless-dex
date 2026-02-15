@@ -15,6 +15,10 @@ create table if not exists public.transactions (
   to_token text,
   from_chain_id integer,
   to_chain_id integer,
+  from_amount text,
+  to_amount text,
+  from_amount_usd text,
+  to_amount_usd text,
   created_at timestamptz default now()
 );
 

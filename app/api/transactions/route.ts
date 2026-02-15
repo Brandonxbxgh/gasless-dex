@@ -49,6 +49,10 @@ export async function POST(request: NextRequest) {
       toToken,
       fromChainId,
       toChainId,
+      fromAmount,
+      toAmount,
+      fromAmountUsd,
+      toAmountUsd,
     } = body as {
       txHash: string;
       chainId: number;
@@ -58,6 +62,10 @@ export async function POST(request: NextRequest) {
       toToken?: string;
       fromChainId?: number;
       toChainId?: number;
+      fromAmount?: string;
+      toAmount?: string;
+      fromAmountUsd?: string;
+      toAmountUsd?: string;
     };
 
     if (!txHash || !chainId || !address || !actionType) {
@@ -81,6 +89,10 @@ export async function POST(request: NextRequest) {
       to_token: toToken ?? null,
       from_chain_id: fromChainId ?? null,
       to_chain_id: toChainId ?? null,
+      from_amount: fromAmount ?? null,
+      to_amount: toAmount ?? null,
+      from_amount_usd: fromAmountUsd ?? null,
+      to_amount_usd: toAmountUsd ?? null,
     });
 
     if (error) {

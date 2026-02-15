@@ -9,6 +9,10 @@ export async function recordTransaction(params: {
   toToken?: string;
   fromChainId?: number;
   toChainId?: number;
+  fromAmount?: string;
+  toAmount?: string;
+  fromAmountUsd?: string;
+  toAmountUsd?: string;
 }) {
   try {
     await fetch("/api/transactions", {

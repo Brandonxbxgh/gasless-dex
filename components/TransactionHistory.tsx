@@ -41,6 +41,10 @@ type OurTx = {
   to_token: string | null;
   from_chain_id: number | null;
   to_chain_id: number | null;
+  from_amount: string | null;
+  to_amount: string | null;
+  from_amount_usd: string | null;
+  to_amount_usd: string | null;
   created_at: string;
 };
 
@@ -116,12 +120,18 @@ function formatNativeAmount(value: string, chainId: number): string | null {
   return `${formatted} ${sym}`;
 }
 
+function truncateHash(hash: string) {
+  if (!hash || hash.length < 12) return hash;
+  return `${hash.slice(0, 6)}...${hash.slice(-6)}`;
+}
+
 export function TransactionHistory() {
   const { address } = useAccount();
   const [txs, setTxs] = useState<WalletHistoryTx[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [prices, setPrices] = useState<Record<string, number>>({});
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!address) {
@@ -162,12 +172,16 @@ export function TransactionHistory() {
     return `$${usd < 1 ? usd.toFixed(2) : usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
+  const copyHash = (hash: string) => {
+    navigator.clipboard.writeText(hash);
+  };
+
   if (!address) return null;
 
   return (
     <div className="space-y-4">
       <p className="text-xs text-[var(--delta-text-muted)]">
-        All recent transactions. Ones performed through our site are marked.
+        All recent transactions. Ones performed through DeltaChainLabs are clearly marked.
       </p>
       {loading ? (
         <p className="text-sm text-[var(--delta-text-muted)] py-4 text-center">Loading…</p>
@@ -178,51 +192,160 @@ export function TransactionHistory() {
           No transactions found. Swaps, bridges, and sends will appear here.
         </p>
       ) : (
-        <div className="space-y-2 max-h-[400px] overflow-y-auto">
+        <div className="space-y-3 max-h-[500px] overflow-y-auto">
           {txs.map((tx) => {
+            const txId = `${tx.chainId}-${tx.hash}`;
+            const isExpanded = expandedId === txId;
             const explorerUrl = `${EXPLORER_URL[tx.chainId] ?? "https://etherscan.io"}/tx/${tx.hash}`;
             const actionLabel = tx.viaDeltaChain ? getActionLabel(tx.viaDeltaChain.action_type) : (BigInt(tx.value) > BigInt(0) ? "Transfer" : "Transaction");
             const nativeAmount = formatNativeAmount(tx.value, tx.chainId);
             const usdAmount = getUsdForNative(tx.value, tx.chainId);
+
             return (
               <div
-                key={`${tx.chainId}-${tx.hash}`}
-                className="flex flex-col gap-2 rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] px-4 py-3 hover:border-[var(--swap-accent)]/30 transition-colors"
+                key={txId}
+                className="rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] overflow-hidden transition-colors hover:border-[var(--swap-accent)]/20"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-medium px-2 py-0.5 rounded bg-white/10 text-slate-300">
-                        {actionLabel}
-                      </span>
-                      {tx.viaDeltaChain && (
-                        <span className="text-xs px-2 py-0.5 rounded-md bg-[var(--swap-accent)]/20 text-[var(--swap-accent)]">
-                          via DeltaChainLabs
+                <div className="px-4 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-semibold uppercase tracking-wide px-2 py-0.5 rounded bg-white/10 text-slate-300">
+                          {actionLabel}
+                        </span>
+                        {tx.viaDeltaChain && (
+                          <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-[var(--swap-accent)]/25 text-[var(--swap-accent)] border border-[var(--swap-accent)]/30">
+                            via DeltaChainLabs
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-white font-medium mt-1.5 truncate">
+                        {formatAction(tx)}
+                        {tx.isError && <span className="text-red-400 ml-1">(failed)</span>}
+                      </p>
+                      <p className="text-xs text-[var(--delta-text-muted)] mt-0.5">
+                        {formatTimeAgo(tx.timeStamp)} · {CHAIN_NAME[tx.chainId] ?? `Chain ${tx.chainId}`}
+                      </p>
+                    </div>
+                    <div className="shrink-0 flex items-center gap-2">
+                      <a
+                        href={explorerUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-medium px-3 py-1.5 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] hover:bg-[var(--swap-accent)]/30 transition-colors"
+                      >
+                        View tx
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => setExpandedId(isExpanded ? null : txId)}
+                        className="text-xs font-medium px-2 py-1.5 rounded-lg bg-white/10 text-slate-400 hover:text-white hover:bg-white/15 transition-colors"
+                      >
+                        {isExpanded ? "Less" : "Details"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {(tx.viaDeltaChain?.from_amount || nativeAmount) && !isExpanded && (
+                    <p className="text-sm text-slate-300 mt-2">
+                      {tx.viaDeltaChain?.from_amount
+                        ? `${tx.viaDeltaChain.from_amount} ${tx.viaDeltaChain.from_token ?? ""}`
+                        : nativeAmount}
+                      {(tx.viaDeltaChain?.from_amount_usd || usdAmount) && (
+                        <span className="ml-2 text-emerald-400/90">
+                          {tx.viaDeltaChain?.from_amount_usd ? `$${tx.viaDeltaChain.from_amount_usd}` : usdAmount}
                         </span>
                       )}
-                    </div>
-                    <p className="text-white font-medium mt-1 truncate">
-                      {formatAction(tx)}
-                      {tx.isError && <span className="text-red-400 ml-1">(failed)</span>}
                     </p>
-                    <p className="text-xs text-[var(--delta-text-muted)] mt-0.5">
-                      {formatTimeAgo(tx.timeStamp)} · {CHAIN_NAME[tx.chainId] ?? `Chain ${tx.chainId}`}
-                    </p>
-                  </div>
-                  <a
-                    href={explorerUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="shrink-0 text-xs font-medium px-3 py-1.5 rounded-lg bg-[var(--swap-accent)]/20 text-[var(--swap-accent)] hover:bg-[var(--swap-accent)]/30 transition-colors"
-                  >
-                    View tx
-                  </a>
+                  )}
                 </div>
-                {(nativeAmount || usdAmount) && (
-                  <p className="text-xs text-[var(--delta-text-muted)]">
-                    {nativeAmount}
-                    {usdAmount && <span className="ml-2 text-emerald-400/90">{usdAmount}</span>}
-                  </p>
+
+                {isExpanded && (
+                  <div className="border-t border-[var(--swap-pill-border)] bg-black/20 px-4 py-3 space-y-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                      {tx.viaDeltaChain ? (
+                        <>
+                          <div>
+                            <p className="text-xs text-[var(--delta-text-muted)] uppercase tracking-wide mb-0.5">Asset sent</p>
+                            <p className="text-white font-medium">
+                              {tx.viaDeltaChain.from_amount ?? "—"} {tx.viaDeltaChain.from_token ?? ""}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-[var(--delta-text-muted)] uppercase tracking-wide mb-0.5">USD value</p>
+                            <p className="text-emerald-400 font-medium">
+                              {tx.viaDeltaChain.from_amount_usd ? `$${tx.viaDeltaChain.from_amount_usd}` : "—"}
+                            </p>
+                          </div>
+                          {(tx.viaDeltaChain.to_amount || tx.viaDeltaChain.to_amount_usd) && (
+                            <>
+                              <div>
+                                <p className="text-xs text-[var(--delta-text-muted)] uppercase tracking-wide mb-0.5">Asset received</p>
+                                <p className="text-white font-medium">
+                                  {tx.viaDeltaChain.to_amount ?? "—"} {tx.viaDeltaChain.to_token ?? ""}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-[var(--delta-text-muted)] uppercase tracking-wide mb-0.5">Received USD</p>
+                                <p className="text-emerald-400 font-medium">
+                                  {tx.viaDeltaChain.to_amount_usd ? `$${tx.viaDeltaChain.to_amount_usd}` : "—"}
+                                </p>
+                              </div>
+                            </>
+                          )}
+                          <div className="sm:col-span-2">
+                            <p className="text-xs text-[var(--delta-text-muted)] uppercase tracking-wide mb-0.5">Blockchain</p>
+                            <p className="text-white font-medium">
+                              {CHAIN_NAME[tx.chainId] ?? `Chain ${tx.chainId}`}
+                              {tx.viaDeltaChain.from_chain_id != null && tx.viaDeltaChain.to_chain_id != null && tx.viaDeltaChain.from_chain_id !== tx.viaDeltaChain.to_chain_id && (
+                                <span className="text-slate-400 ml-1">
+                                  ({CHAIN_NAME[tx.viaDeltaChain.from_chain_id]} → {CHAIN_NAME[tx.viaDeltaChain.to_chain_id]})
+                                </span>
+                              )}
+                            </p>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div>
+                            <p className="text-xs text-[var(--delta-text-muted)] uppercase tracking-wide mb-0.5">Amount</p>
+                            <p className="text-white font-medium">{nativeAmount ?? "—"}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-[var(--delta-text-muted)] uppercase tracking-wide mb-0.5">USD value</p>
+                            <p className="text-emerald-400 font-medium">{usdAmount ?? "—"}</p>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <p className="text-xs text-[var(--delta-text-muted)] uppercase tracking-wide mb-0.5">Blockchain</p>
+                            <p className="text-white font-medium">{CHAIN_NAME[tx.chainId] ?? `Chain ${tx.chainId}`}</p>
+                          </div>
+                        </>
+                      )}
+                      <div className="sm:col-span-2">
+                        <p className="text-xs text-[var(--delta-text-muted)] uppercase tracking-wide mb-0.5">Transaction hash</p>
+                        <div className="flex items-center gap-2">
+                          <code className="text-xs font-mono text-slate-400 bg-black/30 px-2 py-1 rounded truncate max-w-[200px]">
+                            {truncateHash(tx.hash)}
+                          </code>
+                          <button
+                            type="button"
+                            onClick={() => copyHash(tx.hash)}
+                            className="text-xs text-[var(--swap-accent)] hover:underline"
+                          >
+                            Copy
+                          </button>
+                          <a
+                            href={explorerUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-[var(--swap-accent)] hover:underline"
+                          >
+                            View on explorer
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
             );

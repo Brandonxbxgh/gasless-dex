@@ -538,10 +538,11 @@ export function UnifiedSwap() {
           }
         }
         setCompletedAction("wrap");
+        const fromUsd = inputTokenPriceUsd != null ? (parseFloat(amount) * inputTokenPriceUsd).toFixed(2) : undefined;
         setAmount("");
         setQuote(null);
         setSwapQuote(null);
-        recordTransaction({ txHash: hash, chainId: fromChainId, address, actionType: "wrap", fromToken: inputToken.symbol, toToken: outputToken.symbol });
+        recordTransaction({ txHash: hash, chainId: fromChainId, address, actionType: "wrap", fromToken: inputToken.symbol, toToken: outputToken.symbol, fromAmount: amount, toAmount: amount, fromAmountUsd: fromUsd, toAmountUsd: fromUsd });
       } else if (effectiveIsUnwrap) {
         const amountWei = parseUnits(amount, 18);
         const wrappedAddr = WRAPPED_BY_CHAIN[fromChainId] as `0x${string}`;
@@ -562,10 +563,11 @@ export function UnifiedSwap() {
           }
         }
         setCompletedAction("unwrap");
+        const fromUsd = inputTokenPriceUsd != null ? (parseFloat(amount) * inputTokenPriceUsd).toFixed(2) : undefined;
         setAmount("");
         setQuote(null);
         setSwapQuote(null);
-        recordTransaction({ txHash: hash, chainId: fromChainId, address, actionType: "unwrap", fromToken: inputToken.symbol, toToken: outputToken.symbol });
+        recordTransaction({ txHash: hash, chainId: fromChainId, address, actionType: "unwrap", fromToken: inputToken.symbol, toToken: outputToken.symbol, fromAmount: amount, toAmount: amount, fromAmountUsd: fromUsd, toAmountUsd: fromUsd });
       } else if (swapQuote?.transaction) {
         const spender = (swapQuote.allowanceTarget || swapQuote.issues?.allowance?.spender || swapQuote.transaction.to) as `0x${string}`;
         const sellAddr = inputToken.address as `0x${string}`;
@@ -597,9 +599,12 @@ export function UnifiedSwap() {
           }
         }
         setCompletedAction("swap");
+        const toAmt = formatUnits(BigInt(swapQuote.buyAmount), getTokenDecimals(outputToken.symbol, fromChainId));
+        const fromUsd = inputTokenPriceUsd != null ? (parseFloat(amount) * inputTokenPriceUsd).toFixed(2) : undefined;
+        const toUsd = outputTokenPriceUsd != null ? (parseFloat(toAmt) * outputTokenPriceUsd).toFixed(2) : undefined;
         setAmount("");
         setSwapQuote(null);
-        recordTransaction({ txHash: hash, chainId: fromChainId, address, actionType: "swap", fromToken: inputToken.symbol, toToken: outputToken.symbol });
+        recordTransaction({ txHash: hash, chainId: fromChainId, address, actionType: "swap", fromToken: inputToken.symbol, toToken: outputToken.symbol, fromAmount: amount, toAmount: toAmt, fromAmountUsd: fromUsd, toAmountUsd: toUsd });
       } else if (quote) {
         const amountWei = parseUnits(amount, inputToken.decimals).toString();
         const sellAddr = (isInputNative ? NATIVE_TOKEN_ADDRESS : inputToken.address) as `0x${string}`;
@@ -647,10 +652,13 @@ export function UnifiedSwap() {
         let st = await getGaslessStatus(th, fromChainId);
         for (let i = 0; i < 20 && st.status !== "confirmed"; i++) { await new Promise((r) => setTimeout(r, 2000)); st = await getGaslessStatus(th, fromChainId); }
         if (st.transactionHash) {
+          const toAmt = formatUnits(BigInt(quote.buyAmount), getTokenDecimals(outputToken.symbol, fromChainId));
+          const fromUsd = inputTokenPriceUsd != null ? (parseFloat(amount) * inputTokenPriceUsd).toFixed(2) : undefined;
+          const toUsd = outputTokenPriceUsd != null ? (parseFloat(toAmt) * outputTokenPriceUsd).toFixed(2) : undefined;
           setTxHash(st.transactionHash);
           setTxChainId(fromChainId);
           setCompletedAction("swap");
-          recordTransaction({ txHash: st.transactionHash, chainId: fromChainId, address, actionType: "swap", fromToken: inputToken.symbol, toToken: outputToken.symbol });
+          recordTransaction({ txHash: st.transactionHash, chainId: fromChainId, address, actionType: "swap", fromToken: inputToken.symbol, toToken: outputToken.symbol, fromAmount: amount, toAmount: toAmt, fromAmountUsd: fromUsd, toAmountUsd: toUsd });
         }
         setAmount("");
         setQuote(null);
@@ -741,10 +749,15 @@ export function UnifiedSwap() {
           return;
         }
       }
+      const toAmt = freshQuote?.expectedOutputAmount && freshQuote?.outputToken
+        ? formatUnits(BigInt(freshQuote.expectedOutputAmount), freshQuote.outputToken.decimals ?? 18)
+        : undefined;
+      const fromUsd = inputTokenPriceUsd != null ? (parseFloat(amount) * inputTokenPriceUsd).toFixed(2) : undefined;
+      const toUsd = toAmt && outputTokenPriceUsd != null ? (parseFloat(toAmt) * outputTokenPriceUsd).toFixed(2) : undefined;
       setCompletedAction("bridge");
       setAmount("");
       setAcrossQuote(null);
-      recordTransaction({ txHash: hash, chainId: fromChainId, address, actionType: "bridge", fromToken: inputToken.symbol, toToken: outputToken.symbol, fromChainId, toChainId });
+      recordTransaction({ txHash: hash, chainId: fromChainId, address, actionType: "bridge", fromToken: inputToken.symbol, toToken: outputToken.symbol, fromChainId, toChainId, fromAmount: amount, toAmount: toAmt, fromAmountUsd: fromUsd, toAmountUsd: toUsd });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Swap failed";
       setError(msg);
