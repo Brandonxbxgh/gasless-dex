@@ -11,10 +11,20 @@ type ExplorerTx = {
   to: string;
   value: string;
   isError?: string;
+  functionName?: string;
+};
+
+type InternalTx = {
+  hash: string;
+  from: string;
+  to: string;
+  value: string;
+  type: string;
 };
 
 type TokenTransfer = {
   hash?: string;
+  timeStamp?: string;
   from: string;
   to: string;
   value: string;
@@ -83,7 +93,16 @@ export async function GET(request: NextRequest) {
       to: tx.to,
       value: tx.value,
       isError: tx.isError === "1",
+      functionName: tx.functionName ?? null,
     }));
+  };
+
+  const fetchChainInternalTxs = async (chainId: number): Promise<InternalTx[]> => {
+    const url = `${ETHERSCAN_V2_API}?chainid=${chainId}&module=account&action=txlistinternal&address=${address}&startblock=0&endblock=99999999&page=1&offset=50&sort=desc&apikey=${apiKey}`;
+    const res = await fetch(url, { next: { revalidate: 30 } });
+    const data = (await res.json()) as { status: string; result?: InternalTx[] | string; message?: string };
+    if (data.status !== "1" || !Array.isArray(data.result)) return [];
+    return data.result as InternalTx[];
   };
 
   const fetchChainTokenTxs = async (chainId: number): Promise<TokenTransfer[]> => {
@@ -104,10 +123,25 @@ export async function GET(request: NextRequest) {
     const chainResults = await Promise.all(
       CHAIN_IDS.map(async (chainId, i) => {
         await new Promise((r) => setTimeout(r, i * 250));
-        const [txs, tokenTxs] = await Promise.all([fetchChainTxs(chainId), fetchChainTokenTxs(chainId)]);
-        return { chainId, txs, tokenTxs };
+        const [txs, tokenTxs, internalTxs] = await Promise.all([
+          fetchChainTxs(chainId),
+          fetchChainTokenTxs(chainId),
+          fetchChainInternalTxs(chainId),
+        ]);
+        return { chainId, txs, tokenTxs, internalTxs };
       })
     );
+
+    const internalTxByHash = new Map<string, { value: string; type: string }[]>();
+    for (const { chainId, internalTxs } of chainResults) {
+      for (const it of internalTxs) {
+        if (!it.hash || BigInt(it.value || "0") === BigInt(0)) continue;
+        const key = `${chainId}:${it.hash.toLowerCase()}`;
+        const existing = internalTxByHash.get(key) ?? [];
+        existing.push({ value: it.value, type: it.type || "call" });
+        internalTxByHash.set(key, existing);
+      }
+    }
 
     const tokenTxByHash = new Map<string, TokenTransferDisplay[]>();
     for (const { chainId, tokenTxs } of chainResults) {
@@ -126,6 +160,7 @@ export async function GET(request: NextRequest) {
     const ourTxSet = new Set(ourTxs.map((t: { chain_id: number; tx_hash: string }) => `${t.chain_id}:${t.tx_hash.toLowerCase()}`));
     const ourTxMap = new Map(ourTxs.map((t: { chain_id: number; tx_hash: string }) => [`${t.chain_id}:${t.tx_hash.toLowerCase()}`, t]));
 
+    const txKeysSeen = new Set<string>();
     const allTxs: {
       hash: string;
       chainId: number;
@@ -134,13 +169,17 @@ export async function GET(request: NextRequest) {
       to: string;
       value: string;
       isError: boolean;
+      functionName?: string | null;
       viaDeltaChain?: typeof ourTxs[0];
       tokenTransfers?: TokenTransferDisplay[];
+      internalTransfers?: { value: string; type: string }[];
     }[] = [];
 
     for (const { chainId, txs } of chainResults) {
       for (const tx of txs) {
         const key = `${chainId}:${tx.hash.toLowerCase()}`;
+        txKeysSeen.add(key);
+        const internalTransfers = internalTxByHash.get(key);
         allTxs.push({
           hash: tx.hash,
           chainId,
@@ -149,8 +188,35 @@ export async function GET(request: NextRequest) {
           to: tx.to,
           value: tx.value,
           isError: tx.isError,
+          functionName: tx.functionName,
           viaDeltaChain: ourTxSet.has(key) ? ourTxMap.get(key) : undefined,
           tokenTransfers: tokenTxByHash.get(key),
+          internalTransfers: internalTransfers?.length ? internalTransfers : undefined,
+        });
+      }
+    }
+
+    for (const { chainId, tokenTxs } of chainResults) {
+      for (const tt of tokenTxs) {
+        const h = tt.hash;
+        if (!h) continue;
+        const key = `${chainId}:${h.toLowerCase()}`;
+        if (txKeysSeen.has(key)) continue;
+        txKeysSeen.add(key);
+        const ts = tt.timeStamp ? parseInt(tt.timeStamp, 10) : 0;
+        const tokenTransfers = tokenTxByHash.get(key);
+        if (!tokenTransfers?.length) continue;
+        allTxs.push({
+          hash: h,
+          chainId,
+          timeStamp: ts,
+          from: tt.from,
+          to: tt.to,
+          value: "0",
+          isError: false,
+          viaDeltaChain: ourTxSet.has(key) ? ourTxMap.get(key) : undefined,
+          tokenTransfers,
+          internalTransfers: internalTxByHash.get(key),
         });
       }
     }

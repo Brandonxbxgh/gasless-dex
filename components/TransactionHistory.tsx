@@ -62,8 +62,10 @@ type WalletHistoryTx = {
   to: string;
   value: string;
   isError: boolean;
+  functionName?: string | null;
   viaDeltaChain?: OurTx;
   tokenTransfers?: TokenTransferDisplay[];
+  internalTransfers?: { value: string; type: string }[];
 };
 
 function formatTimeAgo(ts: number) {
@@ -121,6 +123,14 @@ function formatAction(tx: WalletHistoryTx): string {
   }
   const val = BigInt(tx.value);
   if (val > BigInt(0)) return "Transfer";
+  if (tx.internalTransfers?.length) {
+    const total = tx.internalTransfers.reduce((sum, t) => sum + Number(BigInt(t.value)), 0);
+    if (total > 0) return `Internal transfer`;
+  }
+  if (tx.functionName) {
+    const fn = tx.functionName.split("(")[0];
+    return fn ? `Contract: ${fn}` : "Transaction";
+  }
   return "Transaction";
 }
 
@@ -218,11 +228,25 @@ export function TransactionHistory() {
               ? getActionLabel(tx.viaDeltaChain.action_type)
               : tx.tokenTransfers?.length
                 ? (tx.tokenTransfers.some((t) => t.direction === "sent") && tx.tokenTransfers.some((t) => t.direction === "received") ? "Swap" : tx.tokenTransfers.some((t) => t.direction === "sent") ? "Send" : "Receive")
-                : BigInt(tx.value) > BigInt(0)
-                  ? "Transfer"
-                  : "Transaction";
+                : tx.internalTransfers?.length
+                  ? "Internal"
+                  : tx.functionName?.toLowerCase().startsWith("approve")
+                    ? "Approval"
+                    : BigInt(tx.value) > BigInt(0)
+                      ? "Transfer"
+                      : "Contract";
             const nativeAmount = formatNativeAmount(tx.value, tx.chainId);
             const usdAmount = getUsdForNative(tx.value, tx.chainId);
+            const internalTotalWei = tx.internalTransfers?.reduce((s, t) => s + BigInt(t.value), BigInt(0)) ?? BigInt(0);
+            const internalAmount = internalTotalWei > BigInt(0) ? formatNativeAmount(internalTotalWei.toString(), tx.chainId) : null;
+            const internalUsd = internalTotalWei > BigInt(0) ? getUsdForNative(internalTotalWei.toString(), tx.chainId) : null;
+            const summaryAmount = tx.viaDeltaChain?.from_amount
+              ? `${tx.viaDeltaChain.from_amount} ${tx.viaDeltaChain.from_token ?? ""}`
+              : tx.tokenTransfers?.length
+                ? tx.tokenTransfers.map((t) => `${t.amount} ${t.symbol}`).join(" · ")
+                : internalAmount ?? tx.functionName?.split("(")[0] ?? nativeAmount;
+            const summaryUsd = tx.viaDeltaChain?.from_amount_usd ? `$${tx.viaDeltaChain.from_amount_usd}` : internalUsd ?? usdAmount;
+            const hasSummary = !!(tx.viaDeltaChain?.from_amount || nativeAmount || tx.tokenTransfers?.length || internalAmount || tx.functionName);
 
             return (
               <div
@@ -269,18 +293,10 @@ export function TransactionHistory() {
                     </div>
                   </div>
 
-                  {(tx.viaDeltaChain?.from_amount || nativeAmount || tx.tokenTransfers?.length) && !isExpanded && (
+                  {hasSummary && !isExpanded && (
                     <p className="text-sm text-slate-300 mt-2">
-                      {tx.viaDeltaChain?.from_amount
-                        ? `${tx.viaDeltaChain.from_amount} ${tx.viaDeltaChain.from_token ?? ""}`
-                        : tx.tokenTransfers?.length
-                          ? tx.tokenTransfers.map((t) => `${t.amount} ${t.symbol}`).join(" · ")
-                          : nativeAmount}
-                      {(tx.viaDeltaChain?.from_amount_usd || usdAmount) && (
-                        <span className="ml-2 text-emerald-400/90">
-                          {tx.viaDeltaChain?.from_amount_usd ? `$${tx.viaDeltaChain.from_amount_usd}` : usdAmount}
-                        </span>
-                      )}
+                      {summaryAmount}
+                      {summaryUsd && <span className="ml-2 text-emerald-400/90">{summaryUsd}</span>}
                     </p>
                   )}
                 </div>
@@ -342,6 +358,32 @@ export function TransactionHistory() {
                               </p>
                             </div>
                           ))}
+                          <div className="sm:col-span-2">
+                            <p className="text-xs text-[var(--delta-text-muted)] uppercase tracking-wide mb-0.5">Blockchain</p>
+                            <p className="text-white font-medium">{CHAIN_NAME[tx.chainId] ?? `Chain ${tx.chainId}`}</p>
+                          </div>
+                        </>
+                      ) : tx.internalTransfers?.length ? (
+                        <>
+                          <div>
+                            <p className="text-xs text-[var(--delta-text-muted)] uppercase tracking-wide mb-0.5">Internal amount</p>
+                            <p className="text-white font-medium">{internalAmount ?? "—"}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-[var(--delta-text-muted)] uppercase tracking-wide mb-0.5">USD value</p>
+                            <p className="text-emerald-400 font-medium">{internalUsd ?? "—"}</p>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <p className="text-xs text-[var(--delta-text-muted)] uppercase tracking-wide mb-0.5">Blockchain</p>
+                            <p className="text-white font-medium">{CHAIN_NAME[tx.chainId] ?? `Chain ${tx.chainId}`}</p>
+                          </div>
+                        </>
+                      ) : tx.functionName ? (
+                        <>
+                          <div className="sm:col-span-2">
+                            <p className="text-xs text-[var(--delta-text-muted)] uppercase tracking-wide mb-0.5">Contract call</p>
+                            <p className="text-white font-medium font-mono text-xs">{tx.functionName}</p>
+                          </div>
                           <div className="sm:col-span-2">
                             <p className="text-xs text-[var(--delta-text-muted)] uppercase tracking-wide mb-0.5">Blockchain</p>
                             <p className="text-white font-medium">{CHAIN_NAME[tx.chainId] ?? `Chain ${tx.chainId}`}</p>
