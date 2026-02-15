@@ -49,34 +49,39 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  const fetchChain = async (chainId: number) => {
+    const key = chainId === 56 ? (process.env.BSCSCAN_API_KEY ?? apiKey) : apiKey;
+    const url = `${EXPLORER_API[chainId]}?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=15&sort=desc&apikey=${key}`;
+    const res = await fetch(url, { next: { revalidate: 30 } });
+    const data = (await res.json()) as { status: string; result?: ExplorerTx[] | string; message?: string };
+    if (data.status !== "1" || !Array.isArray(data.result)) {
+      const errMsg = typeof data.result === "string" ? data.result : (data.message ?? "unknown");
+      console.warn(`[wallet-history] chain ${chainId} failed:`, errMsg);
+      return [];
+    }
+    const mapped = (data.result as ExplorerTx[]).map((tx) => ({
+      hash: tx.hash,
+      chainId,
+      timeStamp: parseInt(tx.timeStamp, 10),
+      from: tx.from,
+      to: tx.to,
+      value: tx.value,
+      isError: tx.isError === "1",
+    }));
+    console.info(`[wallet-history] chain ${chainId}: ${mapped.length} txs`);
+    return mapped;
+  };
+
   try {
-    const [ourTxs, ...chainResults] = await Promise.all([
-      supabase
-        ? supabase
-            .from("transactions")
-            .select("*")
-            .eq("address", address.toLowerCase())
-            .then((r) => r.data ?? [])
-        : Promise.resolve([]),
-      ...CHAIN_IDS.map(async (chainId) => {
-        const url = `${EXPLORER_API[chainId]}?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&page=1&offset=15&sort=desc&apikey=${apiKey}`;
-        const res = await fetch(url, { next: { revalidate: 30 } });
-        const data = (await res.json()) as { status: string; result?: ExplorerTx[]; message?: string };
-        if (data.status !== "1" || !Array.isArray(data.result)) {
-          console.warn(`[wallet-history] chain ${chainId} failed:`, data.message ?? data.result ?? "unknown");
-          return [];
-        }
-        return (data.result as ExplorerTx[]).map((tx) => ({
-          hash: tx.hash,
-          chainId,
-          timeStamp: parseInt(tx.timeStamp, 10),
-          from: tx.from,
-          to: tx.to,
-          value: tx.value,
-          isError: tx.isError === "1",
-        }));
-      }),
-    ]);
+    const ourTxs = supabase
+      ? ((await supabase.from("transactions").select("*").eq("address", address.toLowerCase())).data ?? [])
+      : [];
+
+    const chainResults = await Promise.all(
+      CHAIN_IDS.map((chainId, i) =>
+        i > 0 ? new Promise<Awaited<ReturnType<typeof fetchChain>>>((r) => setTimeout(() => fetchChain(chainId).then(r), i * 250)) : fetchChain(chainId)
+      )
+    );
 
     const ourTxSet = new Set(ourTxs.map((t: { chain_id: number; tx_hash: string }) => `${t.chain_id}:${t.tx_hash.toLowerCase()}`));
     const ourTxMap = new Map(ourTxs.map((t: { chain_id: number; tx_hash: string }) => [`${t.chain_id}:${t.tx_hash.toLowerCase()}`, t]));
