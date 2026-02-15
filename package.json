@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
     "qrcode.react": "^4.1.0",
     "lightweight-charts": "^4.2.0",
     "@solana/wallet-adapter-base": "^0.9.23",

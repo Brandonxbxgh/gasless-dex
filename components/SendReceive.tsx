@@ -8,6 +8,7 @@ import { mainnet } from "viem/chains";
 import { createPublicClient, http } from "viem";
 import { QRCodeSVG } from "qrcode.react";
 import { CHAINS, TOKENS_BY_CHAIN } from "@/lib/send-tokens";
+import { recordTransaction } from "@/lib/record-transaction";
 
 const ERC20_TRANSFER_ABI = [
   {
@@ -125,22 +126,23 @@ export function SendReceive({ activeTab }: { activeTab: "send" | "receive" }) {
     setSendError(null);
     setSendTxHash(null);
     try {
+      let hash: string;
       if (sendToken.isNative) {
-        const hash = await walletClient.sendTransaction({
+        hash = await walletClient.sendTransaction({
           to: recipientAddress as `0x${string}`,
           value: amountWei,
           chain: undefined,
         });
-        setSendTxHash(hash);
       } else {
-        const hash = await walletClient.writeContract({
+        hash = await walletClient.writeContract({
           address: sendToken.address as `0x${string}`,
           abi: ERC20_TRANSFER_ABI,
           functionName: "transfer",
           args: [recipientAddress as `0x${string}`, amountWei],
         });
-        setSendTxHash(hash);
       }
+      setSendTxHash(hash);
+      recordTransaction({ txHash: hash, chainId: sendChainId, address, actionType: "send", fromToken: sendToken.symbol });
       setSendAmount("");
       setSendRecipient("");
       setResolvedAddress(null);
@@ -286,6 +288,9 @@ export function SendReceive({ activeTab }: { activeTab: "send" | "receive" }) {
             {resolvingEns && <p className="mt-1 text-xs text-amber-400">Resolving ENS…</p>}
             {sendRecipient && !recipientAddress && !resolvingEns && isEnsName(sendRecipient) && (
               <p className="mt-1 text-xs text-red-400">ENS not found</p>
+            )}
+            {sendRecipient && !recipientAddress && !resolvingEns && !isEnsName(sendRecipient) && (
+              <p className="mt-1 text-xs text-red-400">Enter a valid EVM address or ENS name</p>
             )}
           </div>
           {chainId !== sendChainId && switchChain && (

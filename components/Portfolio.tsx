@@ -5,6 +5,7 @@ import { useAccount } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { fetchPortfolioBalances, type PortfolioEntry } from "@/lib/portfolio";
 import { SendReceive } from "@/components/SendReceive";
+import { TransactionHistory } from "@/components/TransactionHistory";
 
 const EXPLORER_URL: Record<number, string> = {
   1: "https://etherscan.io",
@@ -162,7 +163,7 @@ export function Portfolio() {
   const chainCount = byChain.length;
   const assetCount = entries.length;
 
-  type PortfolioTab = "overview" | "send" | "receive";
+  type PortfolioTab = "overview" | "send" | "receive" | "history";
   const [portfolioTab, setPortfolioTab] = useState<PortfolioTab>("overview");
 
   if (!isConnected) {
@@ -194,12 +195,12 @@ export function Portfolio() {
         </div>
       </div>
 
-      {/* Portfolio tabs: Overview | Send | Receive */}
-      <div className="flex rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] p-1 mb-6">
+      {/* Portfolio tabs: Overview | Send | Receive | History */}
+      <div className="flex flex-wrap rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] p-1 mb-6">
         <button
           type="button"
           onClick={() => setPortfolioTab("overview")}
-          className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
+          className={`flex-1 min-w-[70px] rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
             portfolioTab === "overview" ? "bg-[var(--swap-accent)]/20 text-[var(--swap-accent)]" : "text-slate-400 hover:text-white"
           }`}
         >
@@ -208,7 +209,7 @@ export function Portfolio() {
         <button
           type="button"
           onClick={() => setPortfolioTab("send")}
-          className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
+          className={`flex-1 min-w-[70px] rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
             portfolioTab === "send" ? "bg-[var(--swap-accent)]/20 text-[var(--swap-accent)]" : "text-slate-400 hover:text-white"
           }`}
         >
@@ -217,16 +218,27 @@ export function Portfolio() {
         <button
           type="button"
           onClick={() => setPortfolioTab("receive")}
-          className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
+          className={`flex-1 min-w-[70px] rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
             portfolioTab === "receive" ? "bg-[var(--swap-accent)]/20 text-[var(--swap-accent)]" : "text-slate-400 hover:text-white"
           }`}
         >
           Receive
         </button>
+        <button
+          type="button"
+          onClick={() => setPortfolioTab("history")}
+          className={`flex-1 min-w-[70px] rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+            portfolioTab === "history" ? "bg-[var(--swap-accent)]/20 text-[var(--swap-accent)]" : "text-slate-400 hover:text-white"
+          }`}
+        >
+          History
+        </button>
       </div>
 
       {portfolioTab === "send" || portfolioTab === "receive" ? (
         <SendReceive activeTab={portfolioTab} />
+      ) : portfolioTab === "history" ? (
+        <TransactionHistory />
       ) : loading && entries.length === 0 ? (
         <div className="py-12 text-center text-[var(--delta-text-muted)]">Loading balances…</div>
       ) : error ? (

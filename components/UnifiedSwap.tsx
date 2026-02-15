@@ -16,6 +16,7 @@ import {
 } from "@/lib/api";
 import { PriceChart } from "@/components/PriceChart";
 import { splitSignature, SignatureType } from "@/lib/signature";
+import { recordTransaction } from "@/lib/record-transaction";
 
 export type SwapTabId = "swap" | "wrap" | "bridge";
 
@@ -540,6 +541,7 @@ export function UnifiedSwap() {
         setAmount("");
         setQuote(null);
         setSwapQuote(null);
+        recordTransaction({ txHash: hash, chainId: fromChainId, address, actionType: "wrap", fromToken: inputToken.symbol, toToken: outputToken.symbol });
       } else if (effectiveIsUnwrap) {
         const amountWei = parseUnits(amount, 18);
         const wrappedAddr = WRAPPED_BY_CHAIN[fromChainId] as `0x${string}`;
@@ -563,6 +565,7 @@ export function UnifiedSwap() {
         setAmount("");
         setQuote(null);
         setSwapQuote(null);
+        recordTransaction({ txHash: hash, chainId: fromChainId, address, actionType: "unwrap", fromToken: inputToken.symbol, toToken: outputToken.symbol });
       } else if (swapQuote?.transaction) {
         const spender = (swapQuote.allowanceTarget || swapQuote.issues?.allowance?.spender || swapQuote.transaction.to) as `0x${string}`;
         const sellAddr = inputToken.address as `0x${string}`;
@@ -596,6 +599,7 @@ export function UnifiedSwap() {
         setCompletedAction("swap");
         setAmount("");
         setSwapQuote(null);
+        recordTransaction({ txHash: hash, chainId: fromChainId, address, actionType: "swap", fromToken: inputToken.symbol, toToken: outputToken.symbol });
       } else if (quote) {
         const amountWei = parseUnits(amount, inputToken.decimals).toString();
         const sellAddr = (isInputNative ? NATIVE_TOKEN_ADDRESS : inputToken.address) as `0x${string}`;
@@ -646,6 +650,7 @@ export function UnifiedSwap() {
           setTxHash(st.transactionHash);
           setTxChainId(fromChainId);
           setCompletedAction("swap");
+          recordTransaction({ txHash: st.transactionHash, chainId: fromChainId, address, actionType: "swap", fromToken: inputToken.symbol, toToken: outputToken.symbol });
         }
         setAmount("");
         setQuote(null);
@@ -739,6 +744,7 @@ export function UnifiedSwap() {
       setCompletedAction("bridge");
       setAmount("");
       setAcrossQuote(null);
+      recordTransaction({ txHash: hash, chainId: fromChainId, address, actionType: "bridge", fromToken: inputToken.symbol, toToken: outputToken.symbol, fromChainId, toChainId });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Swap failed";
       setError(msg);
