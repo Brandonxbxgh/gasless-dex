@@ -3,7 +3,6 @@ import Link from "next/link";
 import { Providers } from "./providers";
 import { Header } from "@/components/Header";
 import { InstallBanner } from "@/components/InstallBanner";
-import { MetaMaskBanner } from "@/components/MetaMaskBanner";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -26,7 +25,6 @@ export default function RootLayout({
         <Providers>
           <div className="relative z-10 min-h-screen flex flex-col">
             <Header />
-            <MetaMaskBanner />
             <div className="flex-1">{children}</div>
             <footer className="py-4 px-4 sm:px-6 border-t border-white/5">
               <div className="mx-auto max-w-4xl flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-[var(--delta-text-muted)]">
