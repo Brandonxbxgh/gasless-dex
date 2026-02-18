@@ -180,11 +180,23 @@ export function TransactionHistory() {
   }, [address]);
 
   useEffect(() => {
-    fetch("/api/coingecko/simple-price?symbols=ETH,MATIC,BNB")
+    fetch("/api/coingecko/simple-price?symbols=ETH,MATIC,BNB,USDC,USDT,WETH,WBNB,DAI,DOGE,PEPE,SHIB,UNI,LINK,AAVE")
       .then((r) => r.json())
       .then((data) => setPrices(data ?? {}))
       .catch(() => {});
   }, []);
+
+  const getUsdForToken = (amount: string, symbol: string): string | null => {
+    const num = parseFloat(amount);
+    if (Number.isNaN(num) || num <= 0) return null;
+    const sym = symbol?.toUpperCase() || "";
+    const price = prices[sym] ?? prices[sym.replace(/^W/, "")];
+    if (price == null || price <= 0) return null;
+    const usd = num * price;
+    if (usd < 0.0001) return null;
+    if (usd < 0.01) return "<$0.01";
+    return `$${usd < 1 ? usd.toFixed(2) : usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
 
   const getUsdForNative = (value: string, chainId: number): string | null => {
     const val = BigInt(value);
@@ -245,7 +257,10 @@ export function TransactionHistory() {
               : tx.tokenTransfers?.length
                 ? tx.tokenTransfers.map((t) => `${t.amount} ${t.symbol}`).join(" · ")
                 : internalAmount ?? tx.functionName?.split("(")[0] ?? nativeAmount;
-            const summaryUsd = tx.viaDeltaChain?.from_amount_usd ? `$${tx.viaDeltaChain.from_amount_usd}` : internalUsd ?? usdAmount;
+            const tokenUsd = tx.tokenTransfers?.length
+              ? tx.tokenTransfers.map((t) => getUsdForToken(t.amount, t.symbol)).find(Boolean)
+              : null;
+            const summaryUsd = tx.viaDeltaChain?.from_amount_usd ? `$${tx.viaDeltaChain.from_amount_usd}` : tokenUsd ?? internalUsd ?? usdAmount;
             const hasSummary = !!(tx.viaDeltaChain?.from_amount || nativeAmount || tx.tokenTransfers?.length || internalAmount || tx.functionName);
 
             return (
@@ -309,27 +324,43 @@ export function TransactionHistory() {
                           <div>
                             <p className="text-xs text-[var(--delta-text-muted)] uppercase tracking-wide mb-0.5">Asset sent</p>
                             <p className="text-white font-medium">
-                              {tx.viaDeltaChain.from_amount ?? "—"} {tx.viaDeltaChain.from_token ?? ""}
+                              {tx.viaDeltaChain.from_amount
+                                ? `${tx.viaDeltaChain.from_amount} ${tx.viaDeltaChain.from_token ?? ""}`
+                                : tx.tokenTransfers?.filter((t) => t.direction === "sent").map((t) => `${t.amount} ${t.symbol}`).join(", ") || "—"}
                             </p>
                           </div>
                           <div>
                             <p className="text-xs text-[var(--delta-text-muted)] uppercase tracking-wide mb-0.5">USD value</p>
                             <p className="text-emerald-400 font-medium">
-                              {tx.viaDeltaChain.from_amount_usd ? `$${tx.viaDeltaChain.from_amount_usd}` : "—"}
+                              {tx.viaDeltaChain.from_amount_usd
+                                ? `$${tx.viaDeltaChain.from_amount_usd}`
+                                : (() => {
+                                    const sent = tx.tokenTransfers?.filter((t) => t.direction === "sent");
+                                    const usd = sent?.map((t) => getUsdForToken(t.amount, t.symbol)).find(Boolean);
+                                    return usd ?? "—";
+                                  })()}
                             </p>
                           </div>
-                          {(tx.viaDeltaChain.to_amount || tx.viaDeltaChain.to_amount_usd) && (
+                          {(tx.viaDeltaChain.to_amount || tx.viaDeltaChain.to_amount_usd || tx.tokenTransfers?.some((t) => t.direction === "received")) && (
                             <>
                               <div>
                                 <p className="text-xs text-[var(--delta-text-muted)] uppercase tracking-wide mb-0.5">Asset received</p>
                                 <p className="text-white font-medium">
-                                  {tx.viaDeltaChain.to_amount ?? "—"} {tx.viaDeltaChain.to_token ?? ""}
+                                  {tx.viaDeltaChain.to_amount
+                                    ? `${tx.viaDeltaChain.to_amount} ${tx.viaDeltaChain.to_token ?? ""}`
+                                    : tx.tokenTransfers?.filter((t) => t.direction === "received").map((t) => `${t.amount} ${t.symbol}`).join(", ") || "—"}
                                 </p>
                               </div>
                               <div>
                                 <p className="text-xs text-[var(--delta-text-muted)] uppercase tracking-wide mb-0.5">Received USD</p>
                                 <p className="text-emerald-400 font-medium">
-                                  {tx.viaDeltaChain.to_amount_usd ? `$${tx.viaDeltaChain.to_amount_usd}` : "—"}
+                                  {tx.viaDeltaChain.to_amount_usd
+                                    ? `$${tx.viaDeltaChain.to_amount_usd}`
+                                    : (() => {
+                                        const recv = tx.tokenTransfers?.filter((t) => t.direction === "received");
+                                        const usd = recv?.map((t) => getUsdForToken(t.amount, t.symbol)).find(Boolean);
+                                        return usd ?? "—";
+                                      })()}
                                 </p>
                               </div>
                             </>

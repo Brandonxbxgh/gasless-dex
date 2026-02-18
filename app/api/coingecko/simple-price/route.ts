@@ -5,10 +5,17 @@ const COINGECKO_IDS: Record<string, string> = {
   WETH: "ethereum",
   USDC: "usd-coin",
   USDT: "tether",
+  DAI: "dai",
   MATIC: "matic-network",
   WMATIC: "matic-network",
   BNB: "binancecoin",
   WBNB: "binancecoin",
+  DOGE: "dogecoin",
+  PEPE: "pepe",
+  SHIB: "shiba-inu",
+  UNI: "uniswap",
+  LINK: "chainlink",
+  AAVE: "aave",
 };
 
 export async function GET(request: Request) {

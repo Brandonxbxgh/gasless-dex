@@ -152,6 +152,7 @@ export function UnifiedSwap() {
   const [activeTab, setActiveTab] = useState<SwapTabId>("swap");
   const [customRecipient, setCustomRecipient] = useState("");
   const [showCustomRecipient, setShowCustomRecipient] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState(false);
 
   const receiveAddress = customRecipient.trim() && isAddress(customRecipient.trim()) && customRecipient.trim() !== address
     ? customRecipient.trim()
@@ -942,6 +943,24 @@ export function UnifiedSwap() {
         <div className="py-12 flex flex-col items-center gap-5">
           <p className="text-[var(--delta-text-muted)] text-base">Connect your wallet</p>
           <ConnectButton />
+          <div className="w-full rounded-xl bg-sky-500/10 border border-sky-500/30 p-4 mt-2">
+            <p className="text-sky-300 text-sm font-medium mb-1">MetaMask users — best experience</p>
+            <p className="text-sky-200/90 text-xs leading-relaxed">
+              For reliable network switching: open MetaMask → tap <strong>Explore</strong> (browser icon) → paste this site URL. Connecting via WalletConnect from Chrome/Safari can block network switches.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                const url = typeof window !== "undefined" ? window.location.href : "";
+                navigator.clipboard?.writeText(url);
+                setCopiedUrl(true);
+                setTimeout(() => setCopiedUrl(false), 2000);
+              }}
+              className="mt-2 text-xs text-sky-400 hover:text-sky-300 underline"
+            >
+              {copiedUrl ? "Copied!" : "Copy site URL"}
+            </button>
+          </div>
         </div>
       ) : (
         <div className="space-y-4">
@@ -1111,6 +1130,9 @@ export function UnifiedSwap() {
               >
                 Switch to {CHAINS.find((c) => c.id === fromChainId)?.name}
               </button>
+              <p className="text-amber-300/80 text-xs pt-1 border-t border-amber-500/20 mt-2">
+                Switch not working? Open MetaMask → <strong>Explore</strong> tab → paste this site. Network switching works best in MetaMask&apos;s in-app browser.
+              </p>
             </div>
           )}
 
