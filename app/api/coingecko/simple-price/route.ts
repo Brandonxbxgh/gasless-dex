@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 const COINGECKO_IDS: Record<string, string> = {
   ETH: "ethereum",
   WETH: "ethereum",
+  SOL: "solana",
   USDC: "usd-coin",
   USDT: "tether",
   DAI: "dai",
