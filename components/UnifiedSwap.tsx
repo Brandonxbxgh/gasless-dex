@@ -110,6 +110,17 @@ function getTokenDecimals(symbol: string, chainId: number): number {
   return dec[symbol] ?? 18;
 }
 
+function getFeeTokenInfo(tokenAddr: string, chainId: number): { decimals: number; symbol: string } {
+  const tokens = TOKENS_BY_CHAIN[chainId] ?? [];
+  const match = tokens.find((t) => t.address.toLowerCase() === tokenAddr.toLowerCase());
+  if (match) return { decimals: match.decimals, symbol: match.symbol };
+  if (tokenAddr.toLowerCase() === NATIVE_TOKEN.toLowerCase()) {
+    const sym = chainId === 56 ? "BNB" : chainId === 137 ? "MATIC" : "ETH";
+    return { decimals: 18, symbol: sym };
+  }
+  return { decimals: 18, symbol: "?" };
+}
+
 export function UnifiedSwap() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
@@ -365,6 +376,9 @@ export function UnifiedSwap() {
         const useSwapApi = isInputNative || isOutputNative;
 
         if (useSwapApi) {
+          /** On BNB USDT→native, request fee in USDT - fee-in-BNB triggers ~94% 0x fee bug */
+          const swapFeeTokenForQuote =
+            fromChainId === 56 && isOutputNative ? inputToken.address : outputToken.address;
           const res = await getSwapQuote({
             chainId: fromChainId,
             sellToken: sellAddr,
@@ -374,7 +388,7 @@ export function UnifiedSwap() {
             recipient: receiveAddress,
             swapFeeBps: SWAP_FEE_BPS,
             swapFeeRecipient: SWAP_FEE_RECIPIENT,
-            swapFeeToken: outputToken.address,
+            swapFeeToken: swapFeeTokenForQuote,
             tradeSurplusRecipient: SWAP_FEE_RECIPIENT,
             slippageBps: 100,
             excludedSources: "Obric",
@@ -577,9 +591,10 @@ export function UnifiedSwap() {
           const approveHash = await walletClient.writeContract({ address: sellAddr, abi: ERC20_APPROVE_ABI, functionName: "approve", args: [spender, maxUint256] });
           if (publicClient) await publicClient.waitForTransactionReceipt({ hash: approveHash });
         }
+        const swapFeeTok = fromChainId === 56 && isOutputNative ? inputToken.address : outputToken.address;
         const fresh = await getSwapQuote({
           chainId: fromChainId, sellToken: sellAddr, buyToken: (isOutputNative ? NATIVE_TOKEN_ADDRESS : outputToken.address) as `0x${string}`,
-          sellAmount: swapQuote.sellAmount, taker: address, recipient: receiveAddress, swapFeeBps: SWAP_FEE_BPS, swapFeeRecipient: SWAP_FEE_RECIPIENT, swapFeeToken: outputToken.address as `0x${string}`, tradeSurplusRecipient: SWAP_FEE_RECIPIENT, slippageBps: 100, excludedSources: "Obric",
+          sellAmount: swapQuote.sellAmount, taker: address, recipient: receiveAddress, swapFeeBps: SWAP_FEE_BPS, swapFeeRecipient: SWAP_FEE_RECIPIENT, swapFeeToken: swapFeeTok as `0x${string}`, tradeSurplusRecipient: SWAP_FEE_RECIPIENT, slippageBps: 100, excludedSources: "Obric",
         });
         if (!fresh?.transaction) { setError("Quote expired — get a fresh quote and try again"); setSwapping(false); return; }
         setSwapQuote(fresh);
@@ -800,7 +815,16 @@ export function UnifiedSwap() {
         ? BigInt(swapQuote.transaction.gas) * BigInt(swapQuote.transaction.gasPrice)
         : swapQuote.totalNetworkFee ? BigInt(swapQuote.totalNetworkFee) : null;
       const feeItems: FeeItem[] = [];
-      if (swapQuote.fees?.integratorFee?.amount) {
+      const feePrice = (tok: string) => (tok === "USDT" || tok === "USDC" ? 1 : outputTokenPriceUsd);
+      if (swapQuote.fees?.integratorFee?.amount && swapQuote.fees.integratorFee.token) {
+        const { decimals: dec, symbol: sym } = getFeeTokenInfo(swapQuote.fees.integratorFee.token, fromChainId);
+        const amt = BigInt(swapQuote.fees.integratorFee.amount);
+        feeItems.push({
+          label: "App fee (0.12%)",
+          value: `${formatUnits(amt, dec)} ${sym}`,
+          valueUsd: toUsdStr(amt, dec, feePrice(sym)),
+        });
+      } else if (swapQuote.fees?.integratorFee?.amount) {
         const dec = getTokenDecimals(outputToken.symbol, fromChainId);
         const amt = BigInt(swapQuote.fees.integratorFee.amount);
         feeItems.push({
@@ -809,7 +833,15 @@ export function UnifiedSwap() {
           valueUsd: toUsdStr(amt, dec, outputTokenPriceUsd),
         });
       }
-      if (swapQuote.fees?.zeroExFee?.amount) {
+      if (swapQuote.fees?.zeroExFee?.amount && swapQuote.fees.zeroExFee.token) {
+        const { decimals: dec, symbol: sym } = getFeeTokenInfo(swapQuote.fees.zeroExFee.token, fromChainId);
+        const amt = BigInt(swapQuote.fees.zeroExFee.amount);
+        feeItems.push({
+          label: "0x fee",
+          value: `${formatUnits(amt, dec)} ${sym}`,
+          valueUsd: toUsdStr(amt, dec, feePrice(sym)),
+        });
+      } else if (swapQuote.fees?.zeroExFee?.amount) {
         const dec = getTokenDecimals(outputToken.symbol, fromChainId);
         const amt = BigInt(swapQuote.fees.zeroExFee.amount);
         feeItems.push({
@@ -818,7 +850,15 @@ export function UnifiedSwap() {
           valueUsd: toUsdStr(amt, dec, outputTokenPriceUsd),
         });
       }
-      if (swapQuote.fees?.gasFee?.amount) {
+      if (swapQuote.fees?.gasFee?.amount && swapQuote.fees.gasFee.token) {
+        const { decimals: dec, symbol: sym } = getFeeTokenInfo(swapQuote.fees.gasFee.token, fromChainId);
+        const amt = BigInt(swapQuote.fees.gasFee.amount);
+        feeItems.push({
+          label: "Network fee",
+          value: `${formatUnits(amt, dec)} ${sym}`,
+          valueUsd: toUsdStr(amt, dec, feePrice(sym)),
+        });
+      } else if (swapQuote.fees?.gasFee?.amount) {
         const dec = getTokenDecimals(outputToken.symbol, fromChainId);
         const amt = BigInt(swapQuote.fees.gasFee.amount);
         feeItems.push({
