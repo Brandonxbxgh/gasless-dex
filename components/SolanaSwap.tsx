@@ -17,6 +17,8 @@ export function SolanaSwap() {
   const [swapping, setSwapping] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [completedAction, setCompletedAction] = useState<"swap" | null>(null);
+  const [balanceLoading, setBalanceLoading] = useState(false);
 
   const sellToken = SOLANA_TOKENS.find((t) => t.mint === sellMint);
   const buyToken = SOLANA_TOKENS.find((t) => t.mint === buyMint);
@@ -62,9 +64,11 @@ export function SolanaSwap() {
     if (!publicKey || !connection) {
       setSellBalance(null);
       setBuyBalance(null);
+      setBalanceLoading(false);
       return;
     }
     let cancelled = false;
+    setBalanceLoading(true);
     const fetchSellBalance = async () => {
       try {
         if (sellMint === SOL_MINT) {
@@ -78,6 +82,8 @@ export function SolanaSwap() {
         }
       } catch {
         if (!cancelled) setSellBalance(null);
+      } finally {
+        if (!cancelled) setBalanceLoading(false);
       }
     };
     const fetchBuyBalance = async () => {
@@ -123,6 +129,7 @@ export function SolanaSwap() {
     if (!publicKey || !quote || !sendTransaction) return;
     setSwapping(true);
     setError(null);
+    setCompletedAction(null);
     try {
       const swapRes = await fetch("/api/jupiter-swap", {
         method: "POST",
@@ -144,12 +151,25 @@ export function SolanaSwap() {
       setTxHash(sig);
       setQuote(null);
       setAmount("");
+
+      try {
+        await connection.confirmTransaction(sig, "confirmed");
+        setCompletedAction("swap");
+      } catch (confirmErr) {
+        setError("Confirmation timed out. Check Solscan for status.");
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Swap failed");
     } finally {
       setSwapping(false);
     }
   }, [publicKey, quote, connection, sendTransaction]);
+
+  const resetForNextAction = useCallback(() => {
+    setTxHash(null);
+    setCompletedAction(null);
+    setError(null);
+  }, []);
 
   const outAmountFormatted = quote && buyToken && typeof quote.outAmount === "string"
     ? (parseInt(quote.outAmount, 10) / Math.pow(10, buyToken.decimals)).toLocaleString("en-US", { maximumFractionDigits: 9 })
@@ -174,9 +194,11 @@ export function SolanaSwap() {
           <div className="rounded-2xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] p-4">
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs text-[var(--delta-text-muted)]">Sell</p>
-              {sellBalance != null && sellToken && (
+              {balanceLoading && sellBalance == null ? (
+                <span className="text-xs text-slate-500">Balance: loading…</span>
+              ) : sellBalance != null && sellToken ? (
                 <span className="text-xs text-slate-500">Balance: {sellBalanceNum.toLocaleString("en-US", { maximumFractionDigits: 6 })} {sellToken.symbol}</span>
-              )}
+              ) : null}
             </div>
             <div className="flex items-center gap-3">
               <input
@@ -204,9 +226,9 @@ export function SolanaSwap() {
             <div className="flex items-center justify-between mt-1">
               <button
                 type="button"
-                onClick={handleMax}
-                disabled={sellBalanceNum <= 0}
-                className="px-3 py-1.5 -ml-1 rounded-lg text-xs font-medium text-[var(--swap-accent)] hover:bg-[var(--swap-accent)]/10 hover:opacity-100 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent cursor-pointer transition-colors"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleMax(); }}
+                disabled={sellBalanceNum <= 0 || balanceLoading}
+                className="min-w-[4rem] min-h-[2rem] px-4 py-2 rounded-lg text-sm font-medium text-[var(--swap-accent)] hover:bg-[var(--swap-accent)]/10 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors select-none"
               >
                 Max
               </button>
@@ -241,36 +263,62 @@ export function SolanaSwap() {
           </div>
 
           {error && <p className="text-red-400 text-sm">{error}</p>}
-
-          <div className="flex flex-col gap-2">
-            <button
-              onClick={fetchQuote}
-              disabled={!amount || parseFloat(amount) <= 0 || loading}
-              className="w-full py-4 rounded-2xl bg-[#2d2d3d] hover:bg-[#3d3d4d] disabled:opacity-50 disabled:cursor-not-allowed text-[var(--swap-accent)] font-semibold text-base"
-            >
-              {loading ? "Getting quote..." : "Get quote"}
-            </button>
-            {quote && (
-              <button
-                onClick={executeSwap}
-                disabled={swapping}
-                className="w-full py-4 rounded-2xl bg-[var(--swap-accent)] hover:opacity-90 disabled:opacity-50 text-white font-semibold text-base"
-              >
-                {swapping ? "Swapping..." : "Swap"}
-              </button>
-            )}
-          </div>
-
-          {txHash && (
-            <a
-              href={`https://solscan.io/tx/${txHash}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block text-center text-sm text-sky-400 hover:underline"
-            >
+          {txHash && swapping && (
+            <p className="text-center text-sm text-amber-400/90">
+              Confirming transaction…{" "}
+              <a href={`https://solscan.io/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="text-sky-400 hover:underline">
+                View on Solscan
+              </a>
+            </p>
+          )}
+          {txHash && !completedAction && !swapping && error && (
+            <a href={`https://solscan.io/tx/${txHash}`} target="_blank" rel="noopener noreferrer" className="block text-center text-sm text-sky-400 hover:underline">
               View on Solscan
             </a>
           )}
+
+          <div className="flex flex-col gap-2">
+            {txHash && completedAction ? (
+              <>
+                <div className="rounded-xl bg-emerald-500/10 border border-emerald-500/30 p-4 text-center">
+                  <p className="text-emerald-400 font-semibold text-lg">Swap complete</p>
+                </div>
+                <a
+                  href={`https://solscan.io/tx/${txHash}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3 rounded-2xl bg-[#2d2d3d] hover:bg-[#3d3d4d] text-sky-400 font-semibold text-base text-center border border-sky-500/30"
+                >
+                  View on Solscan
+                </a>
+                <button
+                  onClick={resetForNextAction}
+                  className="w-full py-4 rounded-2xl bg-[var(--swap-accent)] hover:opacity-90 text-white font-semibold text-base"
+                >
+                  Next swap
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={fetchQuote}
+                  disabled={!amount || parseFloat(amount) <= 0 || loading}
+                  className="w-full py-4 rounded-2xl bg-[#2d2d3d] hover:bg-[#3d3d4d] disabled:opacity-50 disabled:cursor-not-allowed text-[var(--swap-accent)] font-semibold text-base"
+                >
+                  {loading ? "Getting quote..." : "Get quote"}
+                </button>
+                {quote && (
+                  <button
+                    onClick={executeSwap}
+                    disabled={swapping}
+                    className="w-full py-4 rounded-2xl bg-[var(--swap-accent)] hover:opacity-90 disabled:opacity-50 text-white font-semibold text-base"
+                  >
+                    {swapping ? "Swapping..." : "Swap"}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
 
           <p className="text-xs text-slate-500 text-center mt-4">
             Solana swaps require JUPITER_API_KEY in .env (free at portal.jup.ag). Add NEXT_PUBLIC_SOLANA_RPC for better performance.
