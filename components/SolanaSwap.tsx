@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { VersionedTransaction, PublicKey } from "@solana/web3.js";
+import { VersionedTransaction } from "@solana/web3.js";
 import { SOLANA_TOKENS, SOL_MINT, USDC_MINT } from "@/lib/solana-tokens";
 
 export function SolanaSwap() {
@@ -55,34 +55,36 @@ export function SolanaSwap() {
 
   const sellBalanceNum = sellBalance != null ? parseFloat(String(sellBalance).replace(/,/g, "")) : 0;
   const handleMax = useCallback(async () => {
-    if (!publicKey || !connection || !sellToken) return;
+    if (!publicKey || !sellToken) return;
     setError(null);
     setMaxLoading(true);
     try {
-      let bal: number;
-      if (sellMint === SOL_MINT) {
-        const raw = await connection.getBalance(publicKey);
-        bal = raw / 1e9;
-      } else {
-        const accounts = await connection.getParsedTokenAccountsByOwner(publicKey, { mint: new PublicKey(sellMint) });
-        const info = accounts.value[0]?.account?.data?.parsed?.info;
-        bal = info?.tokenAmount?.uiAmount ?? 0;
-      }
+      const res = await fetch(`/api/solana-balance?publicKey=${encodeURIComponent(publicKey.toBase58())}&mint=${encodeURIComponent(sellMint)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed");
+      const bal = data.balance ?? 0;
       if (bal <= 0) return;
       const max = sellToken.symbol === "SOL" ? Math.max(0, bal - 0.01) : bal;
       setAmount(max.toLocaleString("en-US", { maximumFractionDigits: 9 }).replace(/,/g, ""));
       setQuote(null);
-      setSellBalance(bal.toLocaleString("en-US", { maximumFractionDigits: 9 }));
+      setSellBalance(max.toLocaleString("en-US", { maximumFractionDigits: 9 }));
     } catch {
       setError("Could not fetch balance. Try again.");
     } finally {
       setMaxLoading(false);
     }
-  }, [publicKey, connection, sellToken, sellMint]);
+  }, [publicKey, sellToken, sellMint]);
 
   const fetchBalances = useCallback(async (signal?: { cancelled: boolean }) => {
-    if (!publicKey || !connection) return;
+    if (!publicKey) return;
     setBalanceLoading(true);
+    const fetchOne = async (mint: string) => {
+      const res = await fetch(`/api/solana-balance?publicKey=${encodeURIComponent(publicKey.toBase58())}&mint=${encodeURIComponent(mint)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Failed");
+      const bal = data.balance ?? 0;
+      return Number(bal).toLocaleString("en-US", { maximumFractionDigits: 9 });
+    };
     const withRetry = async <T,>(fn: () => Promise<T>, retries = 2): Promise<T> => {
       for (let i = 0; i <= retries; i++) {
         if (signal?.cancelled) throw new Error("cancelled");
@@ -97,20 +99,8 @@ export function SolanaSwap() {
     };
     try {
       const [sellBal, buyBal] = await Promise.all([
-        sellMint === SOL_MINT
-          ? withRetry(() => connection.getBalance(publicKey)).then((b) => (b / 1e9).toLocaleString("en-US", { maximumFractionDigits: 9 }))
-          : withRetry(async () => {
-              const accounts = await connection.getParsedTokenAccountsByOwner(publicKey, { mint: new PublicKey(sellMint) });
-              const uiAmt = accounts.value[0]?.account?.data?.parsed?.info?.tokenAmount?.uiAmount ?? 0;
-              return Number(uiAmt).toLocaleString("en-US", { maximumFractionDigits: 9 });
-            }),
-        buyMint === SOL_MINT
-          ? withRetry(() => connection.getBalance(publicKey)).then((b) => (b / 1e9).toLocaleString("en-US", { maximumFractionDigits: 9 }))
-          : withRetry(async () => {
-              const accounts = await connection.getParsedTokenAccountsByOwner(publicKey, { mint: new PublicKey(buyMint) });
-              const uiAmt = accounts.value[0]?.account?.data?.parsed?.info?.tokenAmount?.uiAmount ?? 0;
-              return Number(uiAmt).toLocaleString("en-US", { maximumFractionDigits: 9 });
-            }),
+        withRetry(() => fetchOne(sellMint)),
+        withRetry(() => fetchOne(buyMint)),
       ]);
       if (!signal?.cancelled) {
         setSellBalance(sellBal);
@@ -124,10 +114,10 @@ export function SolanaSwap() {
     } finally {
       if (!signal?.cancelled) setBalanceLoading(false);
     }
-  }, [publicKey, connection, sellMint, buyMint]);
+  }, [publicKey, sellMint, buyMint]);
 
   useEffect(() => {
-    if (!publicKey || !connection) {
+    if (!publicKey) {
       setSellBalance(null);
       setBuyBalance(null);
       setBalanceLoading(false);
@@ -136,7 +126,7 @@ export function SolanaSwap() {
     const signal = { cancelled: false };
     fetchBalances(signal);
     return () => { signal.cancelled = true; };
-  }, [publicKey, connection, sellMint, buyMint, fetchBalances]);
+  }, [publicKey, sellMint, buyMint, fetchBalances]);
 
   const fetchQuote = useCallback(async () => {
     if (!amountRaw || amountRaw <= 0) return;
@@ -243,22 +233,8 @@ export function SolanaSwap() {
             <button type="button" onClick={() => disconnect()} className="text-xs text-slate-500 hover:text-white">Disconnect</button>
           </div>
           <div className="rounded-2xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] p-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-[var(--delta-text-muted)]">Sell</p>
-              {balanceLoading && sellBalance == null ? (
-                <span className="text-xs text-slate-500">Balance: loading…</span>
-              ) : sellBalance != null && sellToken ? (
-                <span className="text-xs text-slate-500">Balance: {sellBalanceNum.toLocaleString("en-US", { maximumFractionDigits: 6 })} {sellToken.symbol}</span>
-              ) : (
-                <span className="text-xs text-slate-500">
-                  Balance: —{" "}
-                  <button type="button" onClick={() => fetchBalances()} className="text-[var(--swap-accent)] hover:underline">
-                    Refresh
-                  </button>
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-3">
+            <p className="text-xs text-[var(--delta-text-muted)] mb-2">Sell</p>
+            <div className="flex gap-2 items-center rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] px-3 py-2">
               <input
                 type="text"
                 inputMode="decimal"
@@ -269,12 +245,12 @@ export function SolanaSwap() {
                   setAmount(v);
                   setQuote(null);
                 }}
-                className="flex-1 bg-transparent text-white text-2xl font-medium outline-none placeholder:text-slate-500"
+                className="flex-1 min-w-0 bg-transparent border-0 text-white text-lg placeholder:text-slate-500 focus:outline-none focus:ring-0"
               />
               <select
                 value={sellMint}
                 onChange={(e) => { setSellMint(e.target.value); setQuote(null); }}
-                className="rounded-xl bg-[var(--delta-card)] border border-[var(--swap-pill-border)] text-white text-sm px-3 py-2"
+                className="rounded-lg bg-[var(--delta-card)] border border-[var(--swap-pill-border)] text-white text-sm px-2 py-1.5"
               >
                 {SOLANA_TOKENS.map((t) => (
                   <option key={t.mint} value={t.mint}>{t.symbol}</option>
@@ -290,6 +266,18 @@ export function SolanaSwap() {
               >
                 {maxLoading ? "…" : "Max"}
               </button>
+              {balanceLoading && sellBalance == null ? (
+                <span className="text-xs text-slate-500">Balance: loading…</span>
+              ) : sellBalance != null && sellToken ? (
+                <span className="text-xs text-slate-500">Balance: {sellBalanceNum.toLocaleString("en-US", { maximumFractionDigits: 6 })} {sellToken.symbol}</span>
+              ) : (
+                <span className="text-xs text-slate-500">
+                  Balance: —{" "}
+                  <button type="button" onClick={() => fetchBalances()} className="text-[var(--swap-accent)] hover:underline">
+                    Refresh
+                  </button>
+                </span>
+              )}
             </div>
             {inputUsdValue != null && inputUsdValue > 0 && (
               <p className="text-xs text-slate-400 mt-1">≈ ${inputUsdValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</p>
@@ -297,8 +285,21 @@ export function SolanaSwap() {
           </div>
 
           <div className="rounded-2xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] p-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-[var(--delta-text-muted)]">Buy</p>
+            <p className="text-xs text-[var(--delta-text-muted)] mb-2">Buy</p>
+            <div className="flex gap-2 items-center rounded-xl bg-[var(--swap-pill-bg)] border border-[var(--swap-pill-border)] px-3 py-2">
+              <span className="flex-1 min-w-0 text-white text-lg font-medium">{outAmountFormatted}</span>
+              <select
+                value={buyMint}
+                onChange={(e) => { setBuyMint(e.target.value); setQuote(null); }}
+                className="rounded-lg bg-[var(--delta-card)] border border-[var(--swap-pill-border)] text-white text-sm px-2 py-1.5"
+              >
+                {SOLANA_TOKENS.filter((t) => t.mint !== sellMint).map((t) => (
+                  <option key={t.mint} value={t.mint}>{t.symbol}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center justify-between mt-1">
+              <span />
               {buyBalance != null && buyToken ? (
                 <span className="text-xs text-slate-500">Balance: {parseFloat(String(buyBalance).replace(/,/g, "") || "0").toLocaleString("en-US", { maximumFractionDigits: 6 })} {buyToken.symbol}</span>
               ) : balanceLoading ? (
@@ -311,18 +312,6 @@ export function SolanaSwap() {
                   </button>
                 </span>
               )}
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="flex-1 text-white text-2xl font-medium">{outAmountFormatted}</div>
-              <select
-                value={buyMint}
-                onChange={(e) => { setBuyMint(e.target.value); setQuote(null); }}
-                className="rounded-xl bg-[var(--delta-card)] border border-[var(--swap-pill-border)] text-white text-sm px-3 py-2"
-              >
-                {SOLANA_TOKENS.filter((t) => t.mint !== sellMint).map((t) => (
-                  <option key={t.mint} value={t.mint}>{t.symbol}</option>
-                ))}
-              </select>
             </div>
             {outputUsdValue != null && outputUsdValue > 0 && (
               <p className="text-xs text-slate-400 mt-1">≈ ${outputUsdValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</p>

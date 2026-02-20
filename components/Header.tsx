@@ -59,7 +59,7 @@ export function Header() {
           href="/"
           className="text-lg font-semibold tracking-tight text-white hover:text-[var(--swap-accent)] transition-colors"
         >
-          <span><span className="text-slate-400">DeltaChain</span><span className="text-[var(--swap-accent)]">Labs</span></span>
+          <span className="text-[var(--swap-accent)]">DeltaChainLabs</span>
         </Link>
 
         {/* Desktop nav */}
