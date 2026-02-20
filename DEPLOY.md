@@ -67,6 +67,7 @@ Before clicking Deploy, open **Environment Variables** and add these (same as in
 | `NEXT_PUBLIC_SWAP_FEE_RECIPIENT` | `0x08C6D8196De6f610E93A30B82Fb9446B63A37A41` |
 | `JUPITER_API_KEY` | Your Jupiter API key (free at [portal.jup.ag](https://portal.jup.ag/)) — required for Solana swaps |
 | `NEXT_PUBLIC_SOLANA_FEE_RECIPIENT` | Solana wallet for 0.10% fee on Solana swaps. Must have token accounts for SOL, USDC, USDT. |
+| `NEXT_PUBLIC_SOLANA_RPC` | Helius RPC URL: `https://mainnet.helius-rpc.com/?api_key=YOUR_HELIUS_KEY` |
 
 ### Step 4 — Deploy
 

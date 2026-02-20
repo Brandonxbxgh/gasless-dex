@@ -80,6 +80,52 @@ export function SolanaSwap() {
     }
   }, [publicKey, connection, sellToken, sellMint]);
 
+  const fetchBalances = useCallback(async (signal?: { cancelled: boolean }) => {
+    if (!publicKey || !connection) return;
+    setBalanceLoading(true);
+    const withRetry = async <T,>(fn: () => Promise<T>, retries = 2): Promise<T> => {
+      for (let i = 0; i <= retries; i++) {
+        if (signal?.cancelled) throw new Error("cancelled");
+        try {
+          return await fn();
+        } catch (e) {
+          if (i === retries) throw e;
+          await new Promise((r) => setTimeout(r, 500 * (i + 1)));
+        }
+      }
+      throw new Error("Failed after retries");
+    };
+    try {
+      const [sellBal, buyBal] = await Promise.all([
+        sellMint === SOL_MINT
+          ? withRetry(() => connection.getBalance(publicKey)).then((b) => (b / 1e9).toLocaleString("en-US", { maximumFractionDigits: 9 }))
+          : withRetry(async () => {
+              const accounts = await connection.getParsedTokenAccountsByOwner(publicKey, { mint: new PublicKey(sellMint) });
+              const uiAmt = accounts.value[0]?.account?.data?.parsed?.info?.tokenAmount?.uiAmount ?? 0;
+              return Number(uiAmt).toLocaleString("en-US", { maximumFractionDigits: 9 });
+            }),
+        buyMint === SOL_MINT
+          ? withRetry(() => connection.getBalance(publicKey)).then((b) => (b / 1e9).toLocaleString("en-US", { maximumFractionDigits: 9 }))
+          : withRetry(async () => {
+              const accounts = await connection.getParsedTokenAccountsByOwner(publicKey, { mint: new PublicKey(buyMint) });
+              const uiAmt = accounts.value[0]?.account?.data?.parsed?.info?.tokenAmount?.uiAmount ?? 0;
+              return Number(uiAmt).toLocaleString("en-US", { maximumFractionDigits: 9 });
+            }),
+      ]);
+      if (!signal?.cancelled) {
+        setSellBalance(sellBal);
+        setBuyBalance(buyBal);
+      }
+    } catch {
+      if (!signal?.cancelled) {
+        setSellBalance(null);
+        setBuyBalance(null);
+      }
+    } finally {
+      if (!signal?.cancelled) setBalanceLoading(false);
+    }
+  }, [publicKey, connection, sellMint, buyMint]);
+
   useEffect(() => {
     if (!publicKey || !connection) {
       setSellBalance(null);
@@ -87,44 +133,10 @@ export function SolanaSwap() {
       setBalanceLoading(false);
       return;
     }
-    let cancelled = false;
-    setBalanceLoading(true);
-    const fetchSellBalance = async () => {
-      try {
-        if (sellMint === SOL_MINT) {
-          const bal = await connection.getBalance(publicKey);
-          if (!cancelled) setSellBalance((bal / 1e9).toLocaleString("en-US", { maximumFractionDigits: 9 }));
-        } else {
-          const accounts = await connection.getParsedTokenAccountsByOwner(publicKey, { mint: new PublicKey(sellMint) });
-          const info = accounts.value[0]?.account?.data?.parsed?.info;
-          const uiAmt = info?.tokenAmount?.uiAmount ?? 0;
-          if (!cancelled) setSellBalance(Number(uiAmt).toLocaleString("en-US", { maximumFractionDigits: 9 }));
-        }
-      } catch {
-        if (!cancelled) setSellBalance(null);
-      } finally {
-        if (!cancelled) setBalanceLoading(false);
-      }
-    };
-    const fetchBuyBalance = async () => {
-      try {
-        if (buyMint === SOL_MINT) {
-          const bal = await connection.getBalance(publicKey);
-          if (!cancelled) setBuyBalance((bal / 1e9).toLocaleString("en-US", { maximumFractionDigits: 9 }));
-        } else {
-          const accounts = await connection.getParsedTokenAccountsByOwner(publicKey, { mint: new PublicKey(buyMint) });
-          const info = accounts.value[0]?.account?.data?.parsed?.info;
-          const uiAmt = info?.tokenAmount?.uiAmount ?? 0;
-          if (!cancelled) setBuyBalance(Number(uiAmt).toLocaleString("en-US", { maximumFractionDigits: 9 }));
-        }
-      } catch {
-        if (!cancelled) setBuyBalance(null);
-      }
-    };
-    fetchSellBalance();
-    fetchBuyBalance();
-    return () => { cancelled = true; };
-  }, [publicKey, connection, sellMint, buyMint]);
+    const signal = { cancelled: false };
+    fetchBalances(signal);
+    return () => { signal.cancelled = true; };
+  }, [publicKey, connection, sellMint, buyMint, fetchBalances]);
 
   const fetchQuote = useCallback(async () => {
     if (!amountRaw || amountRaw <= 0) return;
@@ -238,7 +250,12 @@ export function SolanaSwap() {
               ) : sellBalance != null && sellToken ? (
                 <span className="text-xs text-slate-500">Balance: {sellBalanceNum.toLocaleString("en-US", { maximumFractionDigits: 6 })} {sellToken.symbol}</span>
               ) : (
-                <span className="text-xs text-slate-500">Balance: —</span>
+                <span className="text-xs text-slate-500">
+                  Balance: —{" "}
+                  <button type="button" onClick={() => fetchBalances()} className="text-[var(--swap-accent)] hover:underline">
+                    Refresh
+                  </button>
+                </span>
               )}
             </div>
             <div className="flex items-center gap-3">
@@ -284,8 +301,15 @@ export function SolanaSwap() {
               <p className="text-xs text-[var(--delta-text-muted)]">Buy</p>
               {buyBalance != null && buyToken ? (
                 <span className="text-xs text-slate-500">Balance: {parseFloat(String(buyBalance).replace(/,/g, "") || "0").toLocaleString("en-US", { maximumFractionDigits: 6 })} {buyToken.symbol}</span>
+              ) : balanceLoading ? (
+                <span className="text-xs text-slate-500">Balance: loading…</span>
               ) : (
-                <span className="text-xs text-slate-500">Balance: {balanceLoading ? "loading…" : "—"}</span>
+                <span className="text-xs text-slate-500">
+                  Balance: —{" "}
+                  <button type="button" onClick={() => fetchBalances()} className="text-[var(--swap-accent)] hover:underline">
+                    Refresh
+                  </button>
+                </span>
               )}
             </div>
             <div className="flex items-center gap-3">
