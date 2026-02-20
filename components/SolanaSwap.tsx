@@ -50,12 +50,13 @@ export function SolanaSwap() {
     ? (parseInt(quote.outAmount, 10) / Math.pow(10, buyToken.decimals)) * buyTokenPriceUsd
     : null;
 
+  const sellBalanceNum = sellBalance != null ? parseFloat(sellBalance.replace(/,/g, "")) : 0;
   const handleMax = useCallback(() => {
-    if (sellBalance != null && sellToken) {
-      const max = sellToken.symbol === "SOL" ? Math.max(0, parseFloat(sellBalance) - 0.01) : parseFloat(sellBalance);
+    if (sellBalance != null && sellToken && sellBalanceNum > 0) {
+      const max = sellToken.symbol === "SOL" ? Math.max(0, sellBalanceNum - 0.01) : sellBalanceNum;
       setAmount(max.toLocaleString("en-US", { maximumFractionDigits: 9 }).replace(/,/g, ""));
     }
-  }, [sellBalance, sellToken]);
+  }, [sellBalance, sellToken, sellBalanceNum]);
 
   useEffect(() => {
     if (!publicKey || !connection) {
@@ -64,7 +65,7 @@ export function SolanaSwap() {
       return;
     }
     let cancelled = false;
-    const fetchBalances = async () => {
+    const fetchSellBalance = async () => {
       try {
         if (sellMint === SOL_MINT) {
           const bal = await connection.getBalance(publicKey);
@@ -75,6 +76,12 @@ export function SolanaSwap() {
           const uiAmt = info?.tokenAmount?.uiAmount ?? 0;
           if (!cancelled) setSellBalance(Number(uiAmt).toLocaleString("en-US", { maximumFractionDigits: 9 }));
         }
+      } catch {
+        if (!cancelled) setSellBalance(null);
+      }
+    };
+    const fetchBuyBalance = async () => {
+      try {
         if (buyMint === SOL_MINT) {
           const bal = await connection.getBalance(publicKey);
           if (!cancelled) setBuyBalance((bal / 1e9).toLocaleString("en-US", { maximumFractionDigits: 9 }));
@@ -85,13 +92,11 @@ export function SolanaSwap() {
           if (!cancelled) setBuyBalance(Number(uiAmt).toLocaleString("en-US", { maximumFractionDigits: 9 }));
         }
       } catch {
-        if (!cancelled) {
-          setSellBalance(null);
-          setBuyBalance(null);
-        }
+        if (!cancelled) setBuyBalance(null);
       }
     };
-    fetchBalances();
+    fetchSellBalance();
+    fetchBuyBalance();
     return () => { cancelled = true; };
   }, [publicKey, connection, sellMint, buyMint]);
 
@@ -170,7 +175,7 @@ export function SolanaSwap() {
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs text-[var(--delta-text-muted)]">Sell</p>
               {sellBalance != null && sellToken && (
-                <span className="text-xs text-slate-500">Balance: {parseFloat(sellBalance).toLocaleString("en-US", { maximumFractionDigits: 6 })} {sellToken.symbol}</span>
+                <span className="text-xs text-slate-500">Balance: {sellBalanceNum.toLocaleString("en-US", { maximumFractionDigits: 6 })} {sellToken.symbol}</span>
               )}
             </div>
             <div className="flex items-center gap-3">
@@ -197,7 +202,14 @@ export function SolanaSwap() {
               </select>
             </div>
             <div className="flex items-center justify-between mt-1">
-              <button type="button" onClick={handleMax} disabled={!sellBalance || parseFloat(sellBalance) <= 0} className="text-xs font-medium text-[var(--swap-accent)] hover:opacity-80 disabled:opacity-50">Max</button>
+              <button
+                type="button"
+                onClick={handleMax}
+                disabled={sellBalanceNum <= 0}
+                className="px-3 py-1.5 -ml-1 rounded-lg text-xs font-medium text-[var(--swap-accent)] hover:bg-[var(--swap-accent)]/10 hover:opacity-100 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent cursor-pointer transition-colors"
+              >
+                Max
+              </button>
             </div>
             {inputUsdValue != null && inputUsdValue > 0 && (
               <p className="text-xs text-slate-400 mt-1">≈ ${inputUsdValue.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</p>
