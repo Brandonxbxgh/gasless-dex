@@ -7,7 +7,7 @@ export async function GET(
   { params }: { params: Promise<{ tradeHash: string }> }
 ) {
   if (!ZERO_EX_API_KEY) {
-    return NextResponse.json({ error: "0x API key not configured." }, { status: 500 });
+    return NextResponse.json({ error: "Service temporarily unavailable." }, { status: 500 });
   }
   const { tradeHash } = await params;
   const chainId = request.nextUrl.searchParams.get("chainId");

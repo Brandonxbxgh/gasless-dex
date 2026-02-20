@@ -5,7 +5,7 @@ const ZERO_EX_API_KEY = process.env.NEXT_PUBLIC_ZERO_EX_API_KEY || process.env.Z
 export async function GET(request: NextRequest) {
   if (!ZERO_EX_API_KEY) {
     return NextResponse.json(
-      { error: "0x API key not configured. Add NEXT_PUBLIC_ZERO_EX_API_KEY or ZERO_EX_API_KEY in Vercel." },
+      { error: "Swaps are temporarily unavailable. Please try again later." },
       { status: 500 }
     );
   }

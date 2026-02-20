@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
   const apiKey = process.env.JUPITER_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
-      { error: "Jupiter API key not configured. Add JUPITER_API_KEY in .env (get a free key at https://portal.jup.ag/)" },
+      { error: "Solana swaps are temporarily unavailable. Please try again later." },
       { status: 503 }
     );
   }
