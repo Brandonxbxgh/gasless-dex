@@ -354,6 +354,7 @@ export function Swap() {
           swapFeeToken: feeParams.swapFeeToken ?? (isSellingNative ? buyToken : sellToken),
           tradeSurplusRecipient: feeParams.tradeSurplusRecipient,
           slippageBps: 100,
+          excludedSources: "Obric",
         });
         if (res.liquidityAvailable && res.transaction) {
           const buyDecimals = isBuyingNative ? 18 : getTokenDecimals(tokens.find((t) => t.address === buyToken)?.symbol ?? "ETH", supportedChainId);
@@ -546,6 +547,7 @@ export function Swap() {
         swapFeeToken: feeParams.swapFeeToken ?? sellToken,
         tradeSurplusRecipient: feeParams.tradeSurplusRecipient,
         slippageBps: 100,
+        excludedSources: "Obric",
       });
       if (!freshQuote?.transaction) {
         setSwapError("Quote expired. Please try again.");

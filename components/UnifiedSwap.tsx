@@ -377,6 +377,7 @@ export function UnifiedSwap() {
             swapFeeToken: outputToken.address,
             tradeSurplusRecipient: SWAP_FEE_RECIPIENT,
             slippageBps: 100,
+            excludedSources: "Obric",
           });
           if (res.liquidityAvailable && res.transaction) {
             setSwapQuote(res);
@@ -578,7 +579,7 @@ export function UnifiedSwap() {
         }
         const fresh = await getSwapQuote({
           chainId: fromChainId, sellToken: sellAddr, buyToken: (isOutputNative ? NATIVE_TOKEN_ADDRESS : outputToken.address) as `0x${string}`,
-          sellAmount: swapQuote.sellAmount, taker: address, recipient: receiveAddress, swapFeeBps: SWAP_FEE_BPS, swapFeeRecipient: SWAP_FEE_RECIPIENT, swapFeeToken: outputToken.address as `0x${string}`, tradeSurplusRecipient: SWAP_FEE_RECIPIENT, slippageBps: 100,
+          sellAmount: swapQuote.sellAmount, taker: address, recipient: receiveAddress, swapFeeBps: SWAP_FEE_BPS, swapFeeRecipient: SWAP_FEE_RECIPIENT, swapFeeToken: outputToken.address as `0x${string}`, tradeSurplusRecipient: SWAP_FEE_RECIPIENT, slippageBps: 100, excludedSources: "Obric",
         });
         if (!fresh?.transaction) { setError("Quote expired — get a fresh quote and try again"); setSwapping(false); return; }
         setSwapQuote(fresh);
@@ -1253,6 +1254,17 @@ export function UnifiedSwap() {
                     <span className="text-white">{quoteBreakdown.totalFeesUsd}</span>
                   </div>
                 )}
+                {quoteBreakdown.totalFeesUsd && outputUsdValue != null && outputUsdValue > 0 && (() => {
+                  const feesNum = parseFloat(quoteBreakdown.totalFeesUsd.replace(/[$,]/g, ""));
+                  if (feesNum > outputUsdValue * 0.5) {
+                    return (
+                      <p className="text-xs text-amber-400 mt-2">
+                        Fees are very high for this trade size. Consider swapping a larger amount for better rates.
+                      </p>
+                    );
+                  }
+                  return null;
+                })()}
                 {quoteBreakdown.type === "gasless" && (
                   <p className="text-xs text-emerald-400">Gasless — no gas to pay</p>
                 )}

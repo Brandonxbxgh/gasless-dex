@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import { VersionedTransaction } from "@solana/web3.js";
+import { VersionedTransaction, PublicKey } from "@solana/web3.js";
 import { SOLANA_TOKENS, SOL_MINT, USDC_MINT } from "@/lib/solana-tokens";
 
 export function SolanaSwap() {
@@ -54,15 +54,31 @@ export function SolanaSwap() {
     : null;
 
   const sellBalanceNum = sellBalance != null ? parseFloat(String(sellBalance).replace(/,/g, "")) : 0;
+  const fetchBalanceClient = useCallback(async (mint: string): Promise<number> => {
+    if (!connection || !publicKey) throw new Error("No connection");
+    if (mint === SOL_MINT) {
+      const raw = await connection.getBalance(publicKey);
+      return raw / 1e9;
+    }
+    const accounts = await connection.getParsedTokenAccountsByOwner(publicKey, { mint: new PublicKey(mint) });
+    const uiAmt = accounts.value[0]?.account?.data?.parsed?.info?.tokenAmount?.uiAmount ?? 0;
+    return Number(uiAmt);
+  }, [connection, publicKey]);
+
   const handleMax = useCallback(async () => {
     if (!publicKey || !sellToken) return;
     setError(null);
     setMaxLoading(true);
     try {
-      const res = await fetch(`/api/solana-balance?publicKey=${encodeURIComponent(publicKey.toBase58())}&mint=${encodeURIComponent(sellMint)}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || "Failed");
-      const bal = data.balance ?? 0;
+      let bal: number;
+      try {
+        const res = await fetch(`/api/solana-balance?publicKey=${encodeURIComponent(publicKey.toBase58())}&mint=${encodeURIComponent(sellMint)}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error || "Failed");
+        bal = data.balance ?? 0;
+      } catch {
+        bal = await fetchBalanceClient(sellMint);
+      }
       if (bal <= 0) return;
       const max = sellToken.symbol === "SOL" ? Math.max(0, bal - 0.01) : bal;
       setAmount(max.toLocaleString("en-US", { maximumFractionDigits: 9 }).replace(/,/g, ""));
@@ -73,17 +89,25 @@ export function SolanaSwap() {
     } finally {
       setMaxLoading(false);
     }
-  }, [publicKey, sellToken, sellMint]);
+  }, [publicKey, sellToken, sellMint, fetchBalanceClient]);
 
   const fetchBalances = useCallback(async (signal?: { cancelled: boolean }) => {
     if (!publicKey) return;
     setBalanceLoading(true);
-    const fetchOne = async (mint: string) => {
+    const fetchOneApi = async (mint: string): Promise<number> => {
       const res = await fetch(`/api/solana-balance?publicKey=${encodeURIComponent(publicKey.toBase58())}&mint=${encodeURIComponent(mint)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Failed");
-      const bal = data.balance ?? 0;
-      return Number(bal).toLocaleString("en-US", { maximumFractionDigits: 9 });
+      return data.balance ?? 0;
+    };
+    const fetchOne = async (mint: string): Promise<string> => {
+      try {
+        const bal = await fetchOneApi(mint);
+        return Number(bal).toLocaleString("en-US", { maximumFractionDigits: 9 });
+      } catch {
+        const bal = await fetchBalanceClient(mint);
+        return Number(bal).toLocaleString("en-US", { maximumFractionDigits: 9 });
+      }
     };
     const withRetry = async <T,>(fn: () => Promise<T>, retries = 2): Promise<T> => {
       for (let i = 0; i <= retries; i++) {
@@ -114,7 +138,7 @@ export function SolanaSwap() {
     } finally {
       if (!signal?.cancelled) setBalanceLoading(false);
     }
-  }, [publicKey, sellMint, buyMint]);
+  }, [publicKey, sellMint, buyMint, fetchBalanceClient]);
 
   useEffect(() => {
     if (!publicKey) {
