@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -58,9 +57,8 @@ export function Header() {
       <nav className="mx-auto flex max-w-4xl items-center justify-between gap-4 px-4 py-3 sm:px-6">
         <Link
           href="/"
-          className="flex items-center gap-2 text-lg font-semibold tracking-tight text-white hover:opacity-90 transition-opacity"
+          className="text-lg font-semibold tracking-tight text-white hover:text-[var(--swap-accent)] transition-colors"
         >
-          <Image src="/logo.png" alt="DeltaChainLabs" width={32} height={32} className="shrink-0 object-contain" />
           <span><span className="text-slate-400">DeltaChain</span><span className="text-[var(--swap-accent)]">Labs</span></span>
         </Link>
 

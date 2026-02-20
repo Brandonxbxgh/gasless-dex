@@ -215,7 +215,7 @@ export function SolanaSwap() {
           )}
 
           <p className="text-xs text-slate-500 text-center mt-4">
-            Add NEXT_PUBLIC_SOLANA_RPC in .env for better performance (e.g. Helius, QuickNode)
+            Solana swaps require JUPITER_API_KEY in .env (free at portal.jup.ag). Add NEXT_PUBLIC_SOLANA_RPC for better performance.
           </p>
         </div>
       )}

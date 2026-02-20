@@ -18,8 +18,18 @@ export async function GET(request: NextRequest) {
   url.searchParams.set("slippageBps", slippageBps);
   url.searchParams.set("restrictIntermediateTokens", "true");
 
+  const apiKey = process.env.JUPITER_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: "Jupiter API key not configured. Add JUPITER_API_KEY in .env (get a free key at https://portal.jup.ag/)" },
+      { status: 503 }
+    );
+  }
+
   try {
-    const res = await fetch(url.toString());
+    const res = await fetch(url.toString(), {
+      headers: { "x-api-key": apiKey },
+    });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       return NextResponse.json({ error: data?.error || data?.message || "Jupiter quote failed", details: data }, { status: res.status });

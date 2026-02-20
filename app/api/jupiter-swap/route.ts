@@ -1,11 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
+  const apiKey = process.env.JUPITER_API_KEY;
+  if (!apiKey) {
+    return NextResponse.json(
+      { error: "Jupiter API key not configured. Add JUPITER_API_KEY in .env (get a free key at https://portal.jup.ag/)" },
+      { status: 503 }
+    );
+  }
+
   try {
     const body = await request.json();
     const res = await fetch("https://api.jup.ag/swap/v1/swap", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+      },
       body: JSON.stringify(body),
     });
     const data = await res.json().catch(() => ({}));
