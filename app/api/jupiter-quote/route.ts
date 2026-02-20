@@ -18,6 +18,11 @@ export async function GET(request: NextRequest) {
   url.searchParams.set("slippageBps", slippageBps);
   url.searchParams.set("restrictIntermediateTokens", "true");
 
+  const solanaFeeRecipient = process.env.NEXT_PUBLIC_SOLANA_FEE_RECIPIENT;
+  if (solanaFeeRecipient) {
+    url.searchParams.set("platformFeeBps", "10");
+  }
+
   const apiKey = process.env.JUPITER_API_KEY;
   if (!apiKey) {
     return NextResponse.json(

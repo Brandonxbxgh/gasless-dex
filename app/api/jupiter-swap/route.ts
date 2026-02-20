@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { PublicKey } from "@solana/web3.js";
+import { getAssociatedTokenAddressSync } from "@solana/spl-token";
 
 export async function POST(request: NextRequest) {
   const apiKey = process.env.JUPITER_API_KEY;
@@ -11,6 +13,23 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
+    const solanaFeeRecipient = process.env.NEXT_PUBLIC_SOLANA_FEE_RECIPIENT;
+
+    if (solanaFeeRecipient && body.quoteResponse) {
+      const outputMint = body.quoteResponse.outputMint;
+      if (outputMint) {
+        try {
+          const feeAccount = getAssociatedTokenAddressSync(
+            new PublicKey(outputMint),
+            new PublicKey(solanaFeeRecipient)
+          );
+          body.feeAccount = feeAccount.toBase58();
+        } catch {
+          // Invalid address or mint — skip fee
+        }
+      }
+    }
+
     const res = await fetch("https://api.jup.ag/swap/v1/swap", {
       method: "POST",
       headers: {
